@@ -2,7 +2,7 @@ import { memo } from 'preact/compat';
 import { useCallback } from 'preact/hooks';
 
 import { online } from '../app/online';
-import { itemHref, readHref, userHref } from '../app/router';
+import { fromHref, itemHref, readHref, userHref } from '../app/router';
 import { commentsInNewTab, settings } from '../app/settings';
 import { showToast } from '../app/toast';
 import { recordLinkOpen, visits } from '../app/visits';
@@ -112,7 +112,11 @@ export const StoryRow = memo(function StoryRow({ story, rank }: StoryRowProps) {
                 >
                     {story.title}
                 </a>
-                {story.domain && <span class="story-domain">{story.domain}</span>}
+                {story.domain && (
+                    <a class="story-domain" href={fromHref(story.domain)} target={commentsTarget} rel={commentsRel}>
+                        {story.domain}
+                    </a>
+                )}
                 <div class="story-meta">
                     {story.score} pts ·{' '}
                     <a class="story-by" href={userHref(story.by)} target={commentsTarget} rel={commentsRel} onPointerDown={prefetchUser} onMouseEnter={prefetchUser}>

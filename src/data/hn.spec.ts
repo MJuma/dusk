@@ -1,6 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
-import { algoliaActivityUrl, commentFromHit, storyFromHit } from './hn';
+import { algoliaActivityUrl, algoliaSearchUrl, commentFromHit, storyFromHit } from './hn';
+
+describe('Algolia listings', () => {
+    it('builds searches by relevance or date with optional filters', () => {
+        const url = new URL(algoliaSearchUrl({ kind: 'story', sort: 'relevance', query: 'rust lang', numericFilters: 'created_at_i>=1', restrictSearchableAttributes: 'url' }, 0));
+
+        expect(url.pathname).toBe('/api/v1/search');
+        expect(url.searchParams.get('tags')).toBe('story');
+        expect(url.searchParams.get('query')).toBe('rust lang');
+        expect(url.searchParams.get('numericFilters')).toBe('created_at_i>=1');
+        expect(url.searchParams.get('restrictSearchableAttributes')).toBe('url');
+    });
+});
 
 describe('Algolia activity', () => {
     it('asks for a user\'s newest stories or comments with only the fields Dusk shows', () => {
@@ -22,6 +34,6 @@ describe('Algolia activity', () => {
     it('maps comment hits with the story they belong to', () => {
         const comment = commentFromHit({ objectID: '7', author: 'pg', created_at_i: 100, story_id: 3, story_title: 'Title', comment_text: 'text' });
 
-        expect(comment).toEqual({ id: 7, storyId: 3, storyTitle: 'Title', html: 'text', time: 100 });
+        expect(comment).toEqual({ id: 7, author: 'pg', storyId: 3, storyTitle: 'Title', html: 'text', time: 100 });
     });
 });

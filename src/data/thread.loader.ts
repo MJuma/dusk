@@ -1,7 +1,7 @@
 import { algoliaItemUrl, firebaseItemUrl, toStory } from './hn';
 import { mapLimit } from './limit';
 import { assembleThread, FIRST_SCREEN_ROWS, missingKidIds, orderTargets, unavailableCount } from './thread.logic';
-import type { AlgoliaItem, FirebaseItem, Story, Thread } from './types';
+import type { AlgoliaItem, FirebaseItem, PollOption, Story, Thread } from './types';
 
 export type FetchJson = <T>(url: string, signal?: AbortSignal) => Promise<T>;
 
@@ -16,10 +16,28 @@ const MAX_GAP_REQUESTS = 400;
 /** While Algolia downloads, walk the first top-level threads in Firebase, within a request budget. */
 const SPECULATIVE_TOP_LEVEL = 2;
 const SPECULATIVE_REQUESTS = 60;
+/** Comment chains are rarely this deep; stops a parent walk on bad data. */
+const MAX_PARENT_HOPS = 64;
 
-function toThread(story: Story, tree: AlgoliaItem, items: ReadonlyMap<number, FirebaseItem>, complete: boolean): Thread {
+function toThread(story: Story, tree: AlgoliaItem, items: ReadonlyMap<number, FirebaseItem>, complete: boolean, poll?: PollOption[]): Thread {
     const comments = assembleThread(tree, items);
-    return { story, comments, complete, unavailable: unavailableCount(story.descendants, comments) };
+    const thread: Thread = { story, comments, complete, unavailable: unavailableCount(story.descendants, comments) };
+    if (poll) {
+        thread.poll = poll;
+    }
+    return thread;
+}
+
+/** The story a comment belongs to: Algolia knows it directly; otherwise walk up Firebase parents. */
+async function storyOf(comment: FirebaseItem, tree: AlgoliaItem | null, fetchJson: FetchJson, signal?: AbortSignal): Promise<number | undefined> {
+    if (tree?.story_id) {
+        return tree.story_id;
+    }
+    let item: FirebaseItem | null = comment;
+    for (let hop = 0; hop < MAX_PARENT_HOPS && item?.type === 'comment' && item.parent !== undefined; hop++) {
+        item = await fetchJson<FirebaseItem | null>(firebaseItemUrl(item.parent), signal);
+    }
+    return item && item.type !== 'comment' ? item.id : undefined;
 }
 
 /**
@@ -69,7 +87,22 @@ export async function loadThread(id: number, fetchJson: FetchJson, options: Load
     if (!storyItem) {
         throw new Error(`Item ${id} not found`);
     }
+    // A link to a comment (e.g. HN's item?id=<comment>) opens its story's thread at that comment.
+    if (storyItem.type === 'comment') {
+        const storyId = await storyOf(storyItem, await treeRequest, fetchJson, signal);
+        if (storyId === undefined) {
+            throw new Error(`Couldn't find the story for comment ${id}`);
+        }
+        return { ...(await loadThread(storyId, fetchJson, options)), focus: id };
+    }
     const story = toStory(storyItem);
+    const pollRequest = storyItem.type === 'poll' && storyItem.parts
+        ? mapLimit(storyItem.parts, concurrency, (partId) => fetchJson<FirebaseItem | null>(firebaseItemUrl(partId), signal))
+            .then((parts) => parts
+                .filter((part): part is FirebaseItem => part !== null && part.deleted !== true)
+                .map((part): PollOption => ({ id: part.id, text: part.text ?? '', score: part.score ?? 0 })))
+            .catch(() => undefined)
+        : Promise.resolve(undefined);
 
     const speculation = (async (): Promise<void> => {
         let frontier = (storyItem.kids ?? []).slice(0, SPECULATIVE_TOP_LEVEL);
@@ -83,6 +116,7 @@ export async function loadThread(id: number, fetchJson: FetchJson, options: Load
     })().catch(() => undefined);
 
     const tree = await treeRequest;
+    const poll = await pollRequest;
     performance.mark('dusk:tree-arrived');
 
     if (!tree) {
@@ -93,7 +127,7 @@ export async function loadThread(id: number, fetchJson: FetchJson, options: Load
             await fetchInto(frontier);
             frontier = frontier.flatMap((kidId) => items.get(kidId)?.kids ?? []);
         }
-        return toThread(story, root, items, true);
+        return toThread(story, root, items, true, poll);
     }
 
     const targets = orderTargets(tree, storyItem.kids);
@@ -103,7 +137,7 @@ export async function loadThread(id: number, fetchJson: FetchJson, options: Load
     await fetchInto(firstScreen);
     performance.mark('dusk:first-screen-ordered');
     if (rest.length > 0 && onPartial) {
-        onPartial(toThread(story, tree, items, false));
+        onPartial(toThread(story, tree, items, false, poll));
     }
     await fetchInto(rest);
 
@@ -117,5 +151,5 @@ export async function loadThread(id: number, fetchJson: FetchJson, options: Load
         missing = missingKidIds(tree, items);
     }
 
-    return toThread(story, tree, items, true);
+    return toThread(story, tree, items, true, poll);
 }

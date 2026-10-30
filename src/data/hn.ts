@@ -29,11 +29,41 @@ export const ACTIVITY_PAGE_SIZE = 30;
 
 const ACTIVITY_FIELDS = 'title,url,points,num_comments,story_text,story_id,story_title,comment_text,created_at_i,author';
 
+/** One Algolia listing: stories or comments, by relevance (`search`) or newest first (`search_by_date`). */
+export interface AlgoliaQuery {
+    kind: 'story' | 'comment';
+    sort: 'relevance' | 'date';
+    /** Extra tags ANDed with the kind, e.g. `author_pg`. */
+    tag?: string;
+    query?: string;
+    numericFilters?: string;
+    restrictSearchableAttributes?: string;
+}
+
+export function algoliaSearchUrl(search: AlgoliaQuery, page: number): string {
+    const params = new URLSearchParams({
+        tags: search.tag ? `${search.kind},${search.tag}` : search.kind,
+        hitsPerPage: String(ACTIVITY_PAGE_SIZE),
+        page: String(page),
+        attributesToRetrieve: ACTIVITY_FIELDS,
+        attributesToHighlight: '',
+        attributesToSnippet: '',
+    });
+    if (search.query) {
+        params.set('query', search.query);
+    }
+    if (search.numericFilters) {
+        params.set('numericFilters', search.numericFilters);
+    }
+    if (search.restrictSearchableAttributes) {
+        params.set('restrictSearchableAttributes', search.restrictSearchableAttributes);
+    }
+    return `${ALGOLIA}/${search.sort === 'date' ? 'search_by_date' : 'search'}?${params.toString()}`;
+}
+
 /** A user's stories or comments, newest first. */
 export function algoliaActivityUrl(user: string, kind: 'story' | 'comment', page: number): string {
-    const tags = encodeURIComponent(`${kind},author_${user}`);
-    return `${ALGOLIA}/search_by_date?tags=${tags}&hitsPerPage=${ACTIVITY_PAGE_SIZE}&page=${page}`
-        + `&attributesToRetrieve=${ACTIVITY_FIELDS}&attributesToHighlight=&attributesToSnippet=`;
+    return algoliaSearchUrl({ kind, sort: 'date', tag: `author_${user}` }, page);
 }
 
 export function feedUrl(kind: FeedKind): string {
@@ -106,6 +136,7 @@ export function storyFromHit(hit: AlgoliaHit): Story {
 export function commentFromHit(hit: AlgoliaHit): UserComment {
     return {
         id: Number(hit.objectID),
+        author: hit.author,
         storyId: hit.story_id ?? Number(hit.objectID),
         storyTitle: hit.story_title ?? '',
         html: hit.comment_text ?? '',

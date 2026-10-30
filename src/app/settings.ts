@@ -73,7 +73,7 @@ export function updateSettings(patch: Partial<Settings>): void {
     }
 }
 
-function isInstalledApp(): boolean {
+export function isInstalledApp(): boolean {
     return matchMedia('(display-mode: standalone)').matches
         || (navigator as Navigator & { standalone?: boolean }).standalone === true;
 }

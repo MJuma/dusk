@@ -48,6 +48,8 @@ const SHORTCUTS: readonly [string, string][] = [
     ['u', 'Parent'],
     ['r', 'Root (top-level comment)'],
     ['c', 'Collapse / expand'],
+    ['s', 'Collapse / expand all threads'],
+    ['/', 'Search'],
     ['?', 'This panel'],
 ];
 

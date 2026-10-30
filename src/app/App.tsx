@@ -1,20 +1,61 @@
 import { useLayoutEffect } from 'preact/hooks';
 
 import { FeedView } from '../feed/FeedView';
-import { ArticleView } from '../offline/ArticleView';
-import { SavedView } from '../offline/SavedView';
-import { SaveSheet } from '../offline/SaveSheet';
+import { saveSheet } from '../offline/saved';
 import { ThreadView } from '../thread/ThreadView';
-import { UserView } from '../user/UserView';
 import { SAVED_ICON } from './icons';
+import { InstallNudge } from './InstallNudge';
+import { lazyComponent } from './lazy';
 import { online } from './online';
 import { refresh } from './refresh';
-import { FEEDS, feedHref, route, routeKey, SAVED_HREF, savedScroll } from './router';
+import { COMMENTS_HREF, feedHref, pastHref, route, routeKey, SAVED_HREF, savedScroll, searchHref } from './router';
+import type { Route } from './router';
 import { settingsOpen } from './settings';
-import { SettingsDialog } from './SettingsDialog';
 import { dismissToast, toast } from './toast';
 
-const LABELS = { top: 'Top', new: 'New', best: 'Best', ask: 'Ask', show: 'Show', jobs: 'Jobs' } as const;
+// Secondary pages and dialogs load on first use so the feed and threads stay small.
+const LOADING = <main class="status">Loading…</main>;
+const SearchView = lazyComponent(() => import('../listing/ListingViews').then((m) => m.SearchView), LOADING);
+const PastView = lazyComponent(() => import('../listing/ListingViews').then((m) => m.PastView), LOADING);
+const NewCommentsView = lazyComponent(() => import('../listing/ListingViews').then((m) => m.NewCommentsView), LOADING);
+const FromView = lazyComponent(() => import('../listing/ListingViews').then((m) => m.FromView), LOADING);
+const UserView = lazyComponent(() => import('../user/UserView').then((m) => m.UserView), LOADING);
+const SavedView = lazyComponent(() => import('../offline/SavedView').then((m) => m.SavedView), LOADING);
+const ArticleView = lazyComponent(() => import('../offline/ArticleView').then((m) => m.ArticleView), LOADING);
+const SettingsDialog = lazyComponent(() => import('./SettingsDialog').then((m) => m.SettingsDialog));
+const SaveSheet = lazyComponent(() => import('../offline/SaveSheet').then((m) => m.SaveSheet));
+
+interface Tab {
+    key: string;
+    label: string;
+    href: string;
+}
+
+/** HN's top navigation: the feeds plus "past" and newest "comments". */
+const TABS: readonly Tab[] = [
+    { key: 'feed:top', label: 'Top', href: feedHref('top') },
+    { key: 'feed:new', label: 'New', href: feedHref('new') },
+    { key: 'feed:best', label: 'Best', href: feedHref('best') },
+    { key: 'past', label: 'Past', href: pastHref() },
+    { key: 'comments', label: 'Comments', href: COMMENTS_HREF },
+    { key: 'feed:ask', label: 'Ask', href: feedHref('ask') },
+    { key: 'feed:show', label: 'Show', href: feedHref('show') },
+    { key: 'feed:jobs', label: 'Jobs', href: feedHref('jobs') },
+];
+
+function activeTab(current: Route): string | undefined {
+    if (current.name === 'feed') {
+        return `feed:${current.kind}`;
+    }
+    return current.name === 'past' || current.name === 'comments' ? current.name : undefined;
+}
+
+const SEARCH_ICON = (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="11" cy="11" r="6" />
+        <path d="M20 20l-4.5-4.5" />
+    </svg>
+);
 
 const REFRESH_ICON = (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -35,8 +76,18 @@ const openSettings = (): void => {
 
 window.addEventListener('keydown', (event) => {
     const typing = event.target instanceof HTMLElement && ['INPUT', 'SELECT', 'TEXTAREA'].includes(event.target.tagName);
-    if (event.key === '?' && !typing && !event.metaKey && !event.ctrlKey && !event.altKey) {
+    if (typing || event.metaKey || event.ctrlKey || event.altKey || settingsOpen.value) {
+        return;
+    }
+    if (event.key === '?') {
         openSettings();
+    } else if (event.key === '/') {
+        event.preventDefault();
+        if (route.value.name === 'search') {
+            document.querySelector<HTMLInputElement>('.search-input')?.focus();
+        } else {
+            location.hash = searchHref();
+        }
     }
 });
 
@@ -83,10 +134,15 @@ function ToastView() {
     return (
         <output class="toast">
             <span>{current.message}</span>
-            {current.action && (
+            {current.action && 'href' in current.action && (
                 <a class="toast-action" href={current.action.href} target="_blank" rel="noopener" onClick={dismissToast}>
                     {current.action.label}
                 </a>
+            )}
+            {current.action && 'onClick' in current.action && (
+                <button type="button" class="toast-action" onClick={current.action.onClick}>
+                    {current.action.label}
+                </button>
             )}
             <button type="button" class="toast-close" aria-label="Dismiss" onClick={dismissToast}>
                 ×
@@ -101,20 +157,23 @@ export function App() {
 
     useLayoutEffect(() => restoreScroll(savedScroll(key)), [key]);
 
-    const activeFeed = current.name === 'feed' ? current.kind : undefined;
+    const active = activeTab(current);
     return (
         <>
             <header class="topbar">
                 <a class="brand" href={feedHref('top')}>
                     Dusk
                 </a>
-                <nav class="tabs" aria-label="Feeds">
-                    {FEEDS.map((kind) => (
-                        <a key={kind} class="tab" href={feedHref(kind)} aria-current={kind === activeFeed ? 'page' : undefined}>
-                            {LABELS[kind]}
+                <nav class="tabs" aria-label="Sections">
+                    {TABS.map((tab) => (
+                        <a key={tab.key} class="tab" href={tab.href} aria-current={tab.key === active ? 'page' : undefined}>
+                            {tab.label}
                         </a>
                     ))}
                 </nav>
+                <a class="icon-btn" href={searchHref()} title="Search (/)" aria-label="Search" aria-current={current.name === 'search' ? 'page' : undefined}>
+                    {SEARCH_ICON}
+                </a>
                 <a class="icon-btn" href={SAVED_HREF} title="Saved for offline" aria-label="Saved for offline" aria-current={current.name === 'saved' ? 'page' : undefined}>
                     {SAVED_ICON}
                 </a>
@@ -132,11 +191,16 @@ export function App() {
             )}
             {current.name === 'item' && <ThreadView key={key} id={current.id} focus={current.focus} />}
             {current.name === 'user' && <UserView key={key} id={current.id} tab={current.tab} />}
+            {current.name === 'feed' && <InstallNudge />}
             {current.name === 'feed' && <FeedView key={key} kind={current.kind} page={current.page} />}
             {current.name === 'saved' && <SavedView key={key} />}
             {current.name === 'read' && <ArticleView key={key} id={current.id} />}
-            <SettingsDialog />
-            <SaveSheet />
+            {current.name === 'search' && <SearchView key={key} query={current.query} type={current.type} sort={current.sort} />}
+            {current.name === 'past' && <PastView key={key} day={current.day} />}
+            {current.name === 'comments' && <NewCommentsView key={key} />}
+            {current.name === 'from' && <FromView key={key} site={current.site} />}
+            {settingsOpen.value && <SettingsDialog />}
+            {saveSheet.value && <SaveSheet />}
             <ToastView />
         </>
     );

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { online } from '../app/online';
 import { refreshTick } from '../app/refresh';
 import { SAVED_HREF } from '../app/router';
+import { readFeedPage } from '../data/cache';
 import { PAGE_SIZE, source } from '../data/source';
 import type { FeedPage } from '../data/source';
 import type { FeedKind, Story } from '../data/types';
@@ -54,6 +55,21 @@ export function FeedView({ kind, page }: FeedViewProps) {
         const force = tick !== mountTick.current;
         const count = shownPages.get(key) ?? 1;
         setError(undefined);
+        // On a cold launch, show the pages from last time while fresh ones load.
+        Promise.all(Array.from({ length: count }, (_, offset) => readFeedPage(kind, page + offset).catch(() => undefined)))
+            .then((cached) => {
+                const restored: FeedPage[] = [];
+                for (const entry of cached) {
+                    if (!entry) {
+                        break;
+                    }
+                    restored.push({ kind, page: entry.page, stories: entry.stories, hasMore: entry.hasMore });
+                }
+                if (active && restored.length > 0) {
+                    setPages((current) => (current.length === 0 ? restored : current));
+                }
+            })
+            .catch(() => undefined);
         const load = async (): Promise<FeedPage[]> => {
             // The first page takes the ranking snapshot that the following pages are cut from.
             const first = await source.feed(kind, page, force);

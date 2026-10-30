@@ -3,6 +3,8 @@ import { signal } from '@preact/signals';
 import type { FeedKind } from '../data/types';
 
 export type UserTab = 'submissions' | 'comments';
+export type SearchType = 'stories' | 'comments';
+export type SearchSort = 'popular' | 'recent';
 
 export type Route =
     | { name: 'feed'; kind: FeedKind; page: number }
@@ -12,19 +14,53 @@ export type Route =
     /** Stories saved for offline reading. */
     | { name: 'saved' }
     /** A saved article in reader view. */
-    | { name: 'read'; id: number };
+    | { name: 'read'; id: number }
+    | { name: 'search'; query: string; type: SearchType; sort: SearchSort }
+    /** A day's top stories (HN's "past"), as a UTC date `YYYY-MM-DD`. */
+    | { name: 'past'; day: string }
+    /** Newest comments across HN. */
+    | { name: 'comments' }
+    /** Stories from one site (HN's "from?site="). */
+    | { name: 'from'; site: string };
 
 export const FEEDS: readonly FeedKind[] = ['top', 'new', 'best', 'ask', 'show', 'jobs'];
 
 const NUMBER = /^\d+$/;
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/** A UTC calendar day shifted by `delta` days. */
+export function shiftDay(day: string, delta: number): string {
+    return new Date(Date.parse(`${day}T00:00:00Z`) + delta * 86_400_000).toISOString().slice(0, 10);
+}
+
+export function today(nowMs: number = Date.now()): string {
+    return new Date(nowMs).toISOString().slice(0, 10);
+}
 
 export function parseHash(hash: string): Route {
-    const [first, second, third] = hash.replace(/^#\/?/, '').split('/');
+    const [first, second, third, fourth] = hash.replace(/^#\/?/, '').split('/');
     if (first === 'item' && second && NUMBER.test(second)) {
         return third && NUMBER.test(third) ? { name: 'item', id: Number(second), focus: Number(third) } : { name: 'item', id: Number(second) };
     }
     if (first === 'saved') {
         return { name: 'saved' };
+    }
+    if (first === 'search') {
+        return {
+            name: 'search',
+            query: second ? decodeURIComponent(second) : '',
+            type: third === 'comments' ? 'comments' : 'stories',
+            sort: fourth === 'recent' ? 'recent' : 'popular',
+        };
+    }
+    if (first === 'past') {
+        return { name: 'past', day: second && DAY.test(second) ? second : shiftDay(today(), -1) };
+    }
+    if (first === 'comments') {
+        return { name: 'comments' };
+    }
+    if (first === 'from' && second) {
+        return { name: 'from', site: decodeURIComponent(second) };
     }
     if (first === 'read' && second && NUMBER.test(second)) {
         return { name: 'read', id: Number(second) };
@@ -46,6 +82,19 @@ export function itemHref(id: number, focus?: number): string {
 }
 
 export const SAVED_HREF = '#/saved';
+export const COMMENTS_HREF = '#/comments';
+
+export function searchHref(query = '', type: SearchType = 'stories', sort: SearchSort = 'popular'): string {
+    return query ? `#/search/${encodeURIComponent(query)}/${type}/${sort}` : '#/search';
+}
+
+export function pastHref(day?: string): string {
+    return day ? `#/past/${day}` : '#/past';
+}
+
+export function fromHref(site: string): string {
+    return `#/from/${encodeURIComponent(site)}`;
+}
 
 export function readHref(id: number): string {
     return `#/read/${id}`;
@@ -68,6 +117,14 @@ export function routeKey(current: Route): string {
             return 'saved';
         case 'read':
             return `read:${current.id}`;
+        case 'search':
+            return `search:${current.type}:${current.sort}:${current.query}`;
+        case 'past':
+            return `past:${current.day}`;
+        case 'comments':
+            return 'comments';
+        case 'from':
+            return `from:${current.site}`;
     }
 }
 

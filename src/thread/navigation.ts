@@ -1,4 +1,5 @@
 export type Command =
+    | 'skim'
     | 'next-thread'
     | 'prev-thread'
     | 'next-comment'
@@ -16,9 +17,19 @@ export function topbarBottom(): number {
     return document.querySelector('.topbar')?.getBoundingClientRect().bottom ?? 0;
 }
 
-/** The line just under the top bar that navigation treats as "where I am". */
+/** Height of the sticky "you are here" bar under the top bar (it is always present in a thread). */
+function trailHeight(): number {
+    return document.querySelector<HTMLElement>('.trail')?.offsetHeight ?? 0;
+}
+
+/** Bottom of everything stuck to the top of the screen while reading a thread. */
+export function stickyBottom(): number {
+    return topbarBottom() + trailHeight();
+}
+
+/** The line just under the sticky bars that navigation treats as "where I am". */
 export function readingLine(): number {
-    return topbarBottom() + LANDING_GAP;
+    return stickyBottom() + LANDING_GAP;
 }
 
 export function rowElement(id: number): HTMLElement | null {

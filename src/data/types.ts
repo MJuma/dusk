@@ -29,6 +29,8 @@ export interface AlgoliaItem {
     points?: number | null;
     created_at_i: number;
     parent_id: number | null;
+    /** The story a comment belongs to. */
+    story_id?: number | null;
     children: AlgoliaItem[];
 }
 
@@ -77,6 +79,17 @@ export interface Thread {
      * Firebase request per comment).
      */
     unavailable: number;
+    /** When a comment was requested, the thread is its story's and this is the comment. */
+    focus?: number;
+    /** Options of a poll, in HN's order. */
+    poll?: PollOption[];
+}
+
+export interface PollOption {
+    id: number;
+    /** HN-formatted HTML. Must be sanitized before rendering. */
+    text: string;
+    score: number;
 }
 
 export type FeedKind = 'top' | 'new' | 'best' | 'ask' | 'show' | 'jobs';
@@ -94,6 +107,7 @@ export interface UserProfile {
 /** A user's comment from Algolia, with the story it belongs to. */
 export interface UserComment {
     id: number;
+    author: string;
     storyId: number;
     storyTitle: string;
     /** Raw HN comment HTML. Must be sanitized before rendering. */

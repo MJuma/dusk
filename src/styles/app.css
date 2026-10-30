@@ -36,6 +36,8 @@
     --gutter: 0.75rem;
     --thumb-w: 48px;
     --thumb-h: 48px;
+    /* The top bar's height; the thread's sticky "you are here" bar sits right below it. */
+    --topbar-h: calc(env(safe-area-inset-top) + 0.7rem + 37px);
     --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
     --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
@@ -217,6 +219,7 @@ svg {
     position: sticky;
     top: 0;
     z-index: 10;
+    min-height: var(--topbar-h);
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -278,6 +281,20 @@ svg {
 .icon-btn:hover {
     background: var(--surface);
     color: var(--title);
+}
+
+.icon-btn[aria-current='page'] {
+    color: var(--accent);
+}
+
+@media (max-width: 520px) {
+    .topbar {
+        gap: 0.2rem;
+    }
+
+    .icon-btn {
+        width: 32px;
+    }
 }
 
 /* ── Feed ────────────────────────────────────────────────── */
@@ -372,6 +389,15 @@ svg {
 
 .thread-head .story-domain {
     margin: 0 0.5em 0 0;
+}
+
+a.story-domain {
+    text-decoration: none;
+}
+
+a.story-domain:hover {
+    color: var(--title);
+    text-decoration: underline;
 }
 
 .story-meta {
@@ -550,6 +576,7 @@ svg {
  * form continuous colored lines down the page.
  */
 .c {
+    position: relative;
     --x: calc(var(--d) * var(--indent));
     --tone: var(--rail-0);
     --tint: color-mix(in srgb, var(--tone) var(--tint-a), transparent);
@@ -579,36 +606,51 @@ svg {
     background-repeat: no-repeat;
 }
 
+/* The rails are tappable: tap one to collapse (or expand) the comment at that level. */
+.c::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: calc(var(--gutter) + var(--x) + var(--rail-gap) - 2px);
+    cursor: pointer;
+}
+
 /* Each comment is a faint card from its own rail rightwards, tinted with its level's color. */
 .c[data-alt] {
     --tint: color-mix(in srgb, var(--tone) var(--tint-b), transparent);
 }
 
-.c[data-hue='1'] {
+[data-hue='0'] {
+    --tone: var(--rail-0);
+}
+
+[data-hue='1'] {
     --tone: var(--rail-1);
 }
 
-.c[data-hue='2'] {
+[data-hue='2'] {
     --tone: var(--rail-2);
 }
 
-.c[data-hue='3'] {
+[data-hue='3'] {
     --tone: var(--rail-3);
 }
 
-.c[data-hue='4'] {
+[data-hue='4'] {
     --tone: var(--rail-4);
 }
 
-.c[data-hue='5'] {
+[data-hue='5'] {
     --tone: var(--rail-5);
 }
 
-.c[data-hue='6'] {
+[data-hue='6'] {
     --tone: var(--rail-6);
 }
 
-.c[data-hue='7'] {
+[data-hue='7'] {
     --tone: var(--rail-7);
 }
 
@@ -948,6 +990,9 @@ svg {
 
 .toast-action {
     flex: none;
+    border: 0;
+    font: inherit;
+    cursor: pointer;
     padding: 0.35rem 0.75rem;
     border-radius: 6px;
     background: var(--accent);
@@ -1122,4 +1167,145 @@ svg {
     color: var(--muted);
     font-size: 0.85em;
     font-style: italic;
+}
+
+/* ── "You are here" bar ──────────────────────────────────── */
+
+.trail {
+    position: sticky;
+    top: var(--topbar-h);
+    z-index: 9;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    height: 2.1rem;
+    padding: 0 var(--gutter);
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+    font-size: 0.8em;
+}
+
+.trail-chain {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 0.3rem;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    overflow-x: auto;
+    list-style: none;
+    white-space: nowrap;
+    scrollbar-width: none;
+}
+
+.trail-pos {
+    margin-right: 0.2rem;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.trail-chip {
+    padding: 0.1rem 0.45rem;
+    border: 0;
+    border-left: 3px solid var(--tone);
+    border-radius: 3px;
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    cursor: pointer;
+}
+
+.trail-current {
+    background: color-mix(in srgb, var(--tone) 22%, transparent);
+    color: var(--title);
+    font-weight: 600;
+}
+
+.trail-skim {
+    flex: none;
+    padding: 0.2rem 0.4rem;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    cursor: pointer;
+}
+
+.trail-skim:hover {
+    background: var(--surface);
+    color: var(--title);
+}
+
+/* ── Polls, search, install hint ─────────────────────────── */
+
+.poll {
+    display: grid;
+    gap: 0.6rem;
+    margin: 0.75rem 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.poll-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.2rem;
+}
+
+.poll-bar {
+    height: 6px;
+    min-width: 2px;
+    border-radius: 3px;
+    background: var(--accent);
+}
+
+.poll-score {
+    flex: none;
+    color: var(--muted);
+    font-size: 0.8em;
+}
+
+.search-form {
+    margin-bottom: 0.25rem;
+}
+
+.search-input {
+    width: 100%;
+    padding: 0.55rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--title);
+    font: inherit;
+    font-size: 1.05em;
+    appearance: none;
+}
+
+.tab-gap {
+    width: 1rem;
+}
+
+.install-nudge {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 0.5rem var(--gutter);
+    padding: 0.55rem 0.55rem 0.55rem 0.9rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+    font-size: 0.88em;
+}
+
+.install-nudge span {
+    flex: 1 1 auto;
+}
+
+.install-share {
+    width: 16px;
+    height: 16px;
+    vertical-align: -3px;
 }

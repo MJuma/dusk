@@ -5,7 +5,8 @@ import { fakeApi, fixtures, KNOWN_GAPS, withoutSubtrees } from './testing';
 import type { Fixture } from './testing';
 import { FIRST_SCREEN_ROWS } from './thread.logic';
 import { loadThread } from './thread.loader';
-import type { AlgoliaItem, Thread } from './types';
+import type { FetchJson } from './thread.loader';
+import type { AlgoliaItem, FirebaseItem, Thread } from './types';
 
 function rows(thread: Thread): [number, number][] {
     return thread.comments.map((comment) => [comment.id, comment.depth]);
@@ -82,5 +83,35 @@ describe('loadThread', () => {
         const thread = await loadThread(fixture.storyId, fakeApi(fixture, null).fetchJson);
 
         expect(rows(thread)).toEqual(expectedRows(fixture));
+    });
+
+    it('opens a comment link as its story\'s thread, focused on the comment', async () => {
+        const fixture = fixtures['medium'] as Fixture;
+        const [commentId] = fixture.expected.find(([, depth]) => depth === 2) ?? [];
+
+        const thread = await loadThread(commentId as number, fakeApi(fixture).fetchJson);
+
+        expect(thread.story.id).toBe(fixture.storyId);
+        expect(thread.focus).toBe(commentId);
+        expect(thread.comments.some((comment) => comment.id === commentId)).toBe(true);
+    });
+
+    it('loads poll options in order', async () => {
+        const items: Record<number, FirebaseItem> = {
+            1: { id: 1, type: 'poll', title: 'Poll', by: 'pg', time: 1, descendants: 0, parts: [3, 2] },
+            2: { id: 2, type: 'pollopt', text: 'B', score: 5 },
+            3: { id: 3, type: 'pollopt', text: 'A', score: 9 },
+        };
+        const fetchJson = (async (url: string) => {
+            const firebase = /\/item\/(\d+)\.json$/.exec(url);
+            if (firebase) {
+                return items[Number(firebase[1])] ?? null;
+            }
+            return { id: 1, type: 'poll', author: 'pg', text: null, created_at_i: 1, parent_id: null, children: [] };
+        }) as FetchJson;
+
+        const thread = await loadThread(1, fetchJson);
+
+        expect(thread.poll).toEqual([{ id: 3, text: 'A', score: 9 }, { id: 2, text: 'B', score: 5 }]);
     });
 });

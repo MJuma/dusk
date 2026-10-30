@@ -2,30 +2,39 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 
 import { online } from '../app/online';
 import { refreshTick } from '../app/refresh';
-import { readHref, userHref } from '../app/router';
+import { fromHref, itemHref, readHref, userHref } from '../app/router';
 import { settingsOpen } from '../app/settings';
 import { getVisit, markSeen, recordThreadLoad } from '../app/visits';
 import type { Visit } from '../app/visits';
 import { hnItemUrl } from '../data/hn';
+import { readThread } from '../data/cache';
 import { source } from '../data/source';
-import type { Thread } from '../data/types';
+import type { Thread, ThreadComment } from '../data/types';
 import { sanitizeHnHtml } from '../lib/sanitize';
 import { ago, timeAgo } from '../lib/time';
 import { savedItems, savedThread, saveSheet } from '../offline/saved';
 import { CommentRow } from './CommentRow';
-import { readingLine, rowAtLine, rowElement, scrollToRow, topbarBottom } from './navigation';
+import { readingLine, rowAtLine, rowElement, scrollToRow, stickyBottom } from './navigation';
 import type { Command } from './navigation';
 import { pickTarget } from './navigation.logic';
 import { maxCommentId, newCommentIds } from './newComments';
 import { indexThread } from './threadIndex';
+import { Poll } from './Poll';
 import { ThreadNav } from './ThreadNav';
-import { expandAncestors, visibleRows } from './ThreadView.logic';
+import { expandAncestors, isCollapsed, visibleRows } from './ThreadView.logic';
+import { Trail } from './Trail';
 
 /** Rows rendered in the first frame; the rest follow right after so big threads paint quickly. */
 const FIRST_PAINT_ROWS = 80;
 /** A new comment counts as seen once it has been on screen this long. */
 const SEEN_DWELL_MS = 400;
 const SEEN_FLUSH_MS = 600;
+/** A horizontal swipe this long (and this straight) on a comment collapses or expands it. */
+const SWIPE_MIN_PX = 70;
+const SWIPE_MAX_DRIFT_PX = 40;
+const SWIPE_MAX_MS = 700;
+/** Touches starting this close to the left edge belong to the system back gesture. */
+const EDGE_PX = 24;
 
 const KEYS: Record<string, Command> = {
     j: 'next-comment',
@@ -37,6 +46,7 @@ const KEYS: Record<string, Command> = {
     u: 'parent',
     r: 'root',
     c: 'toggle',
+    s: 'skim',
 };
 
 function isTyping(target: EventTarget | null): boolean {
@@ -67,11 +77,12 @@ export function ThreadView({ id, focus }: ThreadViewProps) {
     const [rowLimit, setRowLimit] = useState(() => (source.cachedThread(id) ? Number.POSITIVE_INFINITY : FIRST_PAINT_ROWS));
     const [focusId, setFocusId] = useState<number>();
     const [jump, setJump] = useState<{ id: number }>();
-    const [currentThread, setCurrentThread] = useState(0);
+    /** The comment at the reading line; undefined above the comments. */
+    const [currentId, setCurrentId] = useState<number>();
     const loadsRef = useRef(0);
     const seenThisViewRef = useRef(new Set<number>());
-    /** When the thread shown is the copy saved for offline reading, when that copy was saved. */
-    const [savedCopyAt, setSavedCopyAt] = useState<number>();
+    /** When the thread shown is a stored copy (saved for offline, or cached from last time), its age and kind. */
+    const [copy, setCopy] = useState<{ at: number; saved: boolean }>();
 
     useEffect(() => {
         // The first load compares against the visit read at mount; a refresh against the latest one.
@@ -82,18 +93,20 @@ export function ThreadView({ id, focus }: ThreadViewProps) {
         const accept = (next: Thread): void => {
             if (active) {
                 fresh = true;
-                setSavedCopyAt(undefined);
+                setCopy(undefined);
                 setLoaded((current) => ({ thread: next, previous: refreshed ? refreshed.visit : current.previous }));
             }
         };
-        // A copy saved for offline reading shows right away (and is all there is without a
-        // connection); the network version replaces it when it arrives.
+        // A stored copy (saved for offline reading, or cached from last time; whichever is newer)
+        // shows right away and is all there is without a connection. The network version replaces it.
         if (!source.cachedThread(id)) {
-            savedThread(id)
-                .then((copy) => {
-                    if (copy && active && !fresh) {
-                        setSavedCopyAt(copy.savedAt);
-                        setLoaded((current) => (current.thread ? current : { ...current, thread: copy.thread }));
+            Promise.all([savedThread(id), readThread(id).catch(() => undefined)])
+                .then(([saved, cached]) => {
+                    const useSaved = saved !== undefined && (cached === undefined || saved.savedAt >= cached.at);
+                    const stored = useSaved ? { thread: saved.thread, at: saved.savedAt } : cached;
+                    if (stored && active && !fresh) {
+                        setCopy({ at: stored.at, saved: useSaved });
+                        setLoaded((current) => (current.thread ? current : { ...current, thread: stored.thread }));
                     }
                 })
                 .catch(() => undefined);
@@ -140,13 +153,20 @@ export function ThreadView({ id, focus }: ThreadViewProps) {
     const storyBody = useMemo(() => (thread?.story.text ? { __html: sanitizeHnHtml(thread.story.text) } : undefined), [thread]);
 
     // Latest render state for event handlers and observers, which stay stable across renders.
-    const latestRef = useRef({ thread, index, rendered, renderedIds, newIds });
+    const latestRef = useRef({ thread, index, rendered, renderedIds, newIds, toggled });
     useLayoutEffect(() => {
-        latestRef.current = { thread, index, rendered, renderedIds, newIds };
+        latestRef.current = { thread, index, rendered, renderedIds, newIds, toggled };
     });
 
     // Remember this load so the next one can tell what's new.
     useEffect(() => {
+        // A comment link resolves to its story: move to the story's address, scrolled to the comment.
+        if (thread?.complete && thread.story.id !== id) {
+            if (thread.focus !== undefined) {
+                location.replace(itemHref(thread.story.id, thread.focus));
+            }
+            return;
+        }
         if (thread?.complete) {
             recordThreadLoad(id, {
                 count: thread.story.descendants,
@@ -225,6 +245,14 @@ export function ThreadView({ id, focus }: ThreadViewProps) {
                     target = position;
                 }
                 break;
+            case 'skim': {
+                // Collapse every top-level thread (or restore HN's defaults), staying in the current one.
+                const topLevel = currentIndex.topLevel.map((topPosition) => current.comments[topPosition]).filter((comment) => comment !== undefined);
+                const skimmed = topLevel.every((comment) => isCollapsed(comment, latestRef.current.toggled));
+                setToggled(skimmed ? new Set() : new Set(topLevel.filter((comment) => !comment.collapsedByDefault).map((comment) => comment.id)));
+                target = atComment ? currentIndex.topLevel[atComment.topLevelIndex] : undefined;
+                break;
+            }
         }
         const targetComment = target === undefined ? undefined : current.comments[target];
         if (targetComment) {
@@ -240,6 +268,113 @@ export function ThreadView({ id, focus }: ThreadViewProps) {
             jumpTo(focus);
         }
     }, [focus, thread, index, jumpTo]);
+
+    const currentComment = currentId === undefined ? undefined : thread?.comments[index.position.get(currentId) ?? -1];
+    const chain = useMemo(() => {
+        const result = [];
+        let comment = currentComment;
+        while (comment && thread) {
+            result.unshift(comment);
+            comment = comment.depth > 0 ? thread.comments[index.position.get(comment.parentId) ?? -1] : undefined;
+        }
+        return result;
+    }, [currentComment, thread, index]);
+    const skimmed = useMemo(
+        () => index.topLevel.length > 0 && index.topLevel.every((position) => {
+            const comment = thread?.comments[position];
+            return comment !== undefined && isCollapsed(comment, toggled);
+        }),
+        [index, thread, toggled],
+    );
+    const toggleSkim = useCallback(() => {
+        navigate('skim');
+    }, [navigate]);
+
+    // Tap a rail to collapse (or expand) the comment at that level; swipe a comment left to
+    // collapse it and right to expand it. Both are delegated from the comment list.
+    const commentsRef = useRef<HTMLElement>(null);
+    useEffect(() => {
+        const section = commentsRef.current;
+        if (!section) {
+            return undefined;
+        }
+        const commentFor = (element: Element): ThreadComment | undefined => {
+            const { thread: current, index: currentIndex } = latestRef.current;
+            return current?.comments[currentIndex.position.get(Number(element.id.slice(1))) ?? -1];
+        };
+        const ancestorAt = (comment: ThreadComment, level: number): ThreadComment | undefined => {
+            const { thread: current, index: currentIndex } = latestRef.current;
+            let ancestor: ThreadComment | undefined = comment;
+            while (ancestor && ancestor.depth > level) {
+                ancestor = current?.comments[currentIndex.position.get(ancestor.parentId) ?? -1];
+            }
+            return ancestor;
+        };
+        const onClick = (event: MouseEvent): void => {
+            // Clicks on a comment's text land on its children; only the rail area hits the article itself.
+            const article = event.target instanceof HTMLElement && event.target.matches('article.c') ? event.target : undefined;
+            const comment = article ? commentFor(article) : undefined;
+            if (!article || !comment) {
+                return;
+            }
+            const style = getComputedStyle(article);
+            const railsEnd = parseFloat(style.paddingLeft);
+            const x = event.clientX - article.getBoundingClientRect().left;
+            if (x >= railsEnd) {
+                return;
+            }
+            const indent = parseFloat(style.getPropertyValue('--indent'));
+            const gutter = railsEnd - comment.depth * indent - parseFloat(style.getPropertyValue('--rail-gap'));
+            const level = Math.max(0, Math.min(comment.depth, Math.round((x - gutter) / indent)));
+            const target = ancestorAt(comment, level);
+            if (target) {
+                toggle(target.id);
+                jumpTo(target.id);
+            }
+        };
+        let swipe: { x: number; y: number; at: number; element: Element } | undefined;
+        const onTouchStart = (event: TouchEvent): void => {
+            const touch = event.touches[0];
+            const target = event.target instanceof Element ? event.target : undefined;
+            const article = target?.closest('article.c');
+            swipe = event.touches.length === 1 && touch && article && touch.clientX > EDGE_PX && !target?.closest('pre, table, a, button')
+                ? { x: touch.clientX, y: touch.clientY, at: event.timeStamp, element: article }
+                : undefined;
+        };
+        const onTouchEnd = (event: TouchEvent): void => {
+            const start = swipe;
+            swipe = undefined;
+            const touch = event.changedTouches[0];
+            if (!start || !touch) {
+                return;
+            }
+            const dx = touch.clientX - start.x;
+            if (Math.abs(dx) < SWIPE_MIN_PX || Math.abs(touch.clientY - start.y) > SWIPE_MAX_DRIFT_PX || event.timeStamp - start.at > SWIPE_MAX_MS) {
+                return;
+            }
+            let comment = commentFor(start.element);
+            if (!comment) {
+                return;
+            }
+            const collapsed = isCollapsed(comment, latestRef.current.toggled);
+            if (dx < 0 && !collapsed && comment.descendantCount === 0 && comment.depth > 0) {
+                // A reply with no replies of its own: collapse the conversation it belongs to.
+                comment = ancestorAt(comment, comment.depth - 1);
+            }
+            if (comment && (dx < 0) !== isCollapsed(comment, latestRef.current.toggled)) {
+                toggle(comment.id);
+                setFocusId(comment.id);
+            }
+        };
+        section.addEventListener('click', onClick);
+        section.addEventListener('touchstart', onTouchStart, { passive: true });
+        section.addEventListener('touchend', onTouchEnd, { passive: true });
+        return () => {
+            section.removeEventListener('click', onClick);
+            section.removeEventListener('touchstart', onTouchStart);
+            section.removeEventListener('touchend', onTouchEnd);
+        };
+    }, [toggle, jumpTo, thread]);
 
     const openSave = useCallback(() => {
         if (thread) {
@@ -275,7 +410,7 @@ export function ThreadView({ id, focus }: ThreadViewProps) {
             frame = 0;
             const { rendered: currentRows, renderedIds: ids } = latestRef.current;
             const row = currentRows[rowAtLine(ids, readingLine())];
-            setCurrentThread(row ? row.comment.topLevelIndex + 1 : 0);
+            setCurrentId(row?.comment.id);
         };
         const onScroll = (): void => {
             if (frame === 0) {
@@ -326,7 +461,7 @@ export function ThreadView({ id, focus }: ThreadViewProps) {
                 }
             }
         }, {
-            rootMargin: `${-Math.round(topbarBottom())}px 0px ${-Math.round(Math.max(0, window.innerHeight - navTop))}px 0px`,
+            rootMargin: `${-Math.round(stickyBottom())}px 0px ${-Math.round(Math.max(0, window.innerHeight - navTop))}px 0px`,
             threshold: [0, 0.25, 0.5, 0.75, 1],
         });
         for (const commentId of newIds) {
@@ -356,8 +491,13 @@ export function ThreadView({ id, focus }: ThreadViewProps) {
     const lastLoad = previous?.commentsAt;
     const saved = savedItems.value.get(story.id);
     let status = error ? `Couldn't refresh: ${error}` : undefined;
-    if (savedCopyAt !== undefined) {
-        status = error || !online.value ? `Offline · showing the copy saved ${ago(savedCopyAt)}` : `Showing the copy saved ${ago(savedCopyAt)} · updating…`;
+    if (copy) {
+        const which = copy.saved ? `the copy saved ${ago(copy.at)}` : `the copy from ${ago(copy.at)}`;
+        if (error || !online.value) {
+            status = `Offline · showing ${which}`;
+        } else {
+            status = copy.saved ? `Showing ${which} · updating…` : 'Updating…';
+        }
     }
     return (
         <main class="thread">
@@ -372,7 +512,11 @@ export function ThreadView({ id, focus }: ThreadViewProps) {
                     {!story.url && story.title}
                 </h1>
                 <div class="story-meta">
-                    {story.domain && <span class="story-domain">{story.domain}</span>}
+                    {story.domain && (
+                        <a class="story-domain" href={fromHref(story.domain)}>
+                            {story.domain}
+                        </a>
+                    )}
                     {story.score} pts ·{' '}
                     <a class="story-by" href={userHref(story.by)}>
                         {story.by}
@@ -405,9 +549,13 @@ export function ThreadView({ id, focus }: ThreadViewProps) {
                     </p>
                 )}
                 {storyBody && <div class="thread-text" dangerouslySetInnerHTML={storyBody} />}
+                {thread.poll && <Poll options={thread.poll} />}
             </header>
             {status && <p class="status">{status}</p>}
-            <section class="comments" aria-label="Comments">
+            {index.topLevel.length > 0 && (
+                <Trail chain={chain} topLevelCount={index.topLevel.length} skimmed={skimmed} onJump={jumpTo} onSkim={toggleSkim} />
+            )}
+            <section ref={commentsRef} class="comments" aria-label="Comments">
                 {rendered.map(({ comment, collapsed, newInside }) => (
                     <CommentRow
                         key={comment.id}
@@ -433,7 +581,7 @@ export function ThreadView({ id, focus }: ThreadViewProps) {
                     </a>
                 </p>
             )}
-            <ThreadNav current={currentThread} total={index.topLevel.length} newCount={newIds.size} onCommand={navigate} />
+            <ThreadNav current={currentComment ? currentComment.topLevelIndex + 1 : 0} total={index.topLevel.length} newCount={newIds.size} onCommand={navigate} />
         </main>
     );
 }

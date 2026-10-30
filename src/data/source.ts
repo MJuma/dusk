@@ -1,4 +1,6 @@
-import { algoliaActivityUrl, commentFromHit, feedUrl, firebaseItemUrl, firebaseUserUrl, storyFromHit, toStory } from './hn';
+import { writeFeedPage, writeThread } from './cache';
+import { algoliaSearchUrl, commentFromHit, feedUrl, firebaseItemUrl, firebaseUserUrl, storyFromHit, toStory } from './hn';
+import type { AlgoliaQuery } from './hn';
 import { mapLimit } from './limit';
 import { loadThread } from './thread.loader';
 import type { FetchJson } from './thread.loader';
@@ -93,6 +95,7 @@ export class HnSource {
             .map(toStory);
         const result: FeedPage = { kind, page, stories, hasMore: snapshot.ids.length > (page + 1) * PAGE_SIZE };
         this.feeds.set(`${kind}:${page}`, { snapshot, page: result });
+        writeFeedPage(kind, page, stories, result.hasMore).catch(() => undefined);
         return result;
     }
 
@@ -123,43 +126,33 @@ export class HnSource {
         });
     }
 
-    public cachedStoriesBy(id: string, page: number): ActivityPage<Story> | undefined {
-        return this.activity.get(`story:${id}:${page}`) as ActivityPage<Story> | undefined;
+    /** Algolia query for a user's stories or comments, newest first. */
+    public static activityQuery(id: string, kind: 'story' | 'comment'): AlgoliaQuery {
+        return { kind, sort: 'date', tag: `author_${id}` };
     }
 
-    public cachedCommentsBy(id: string, page: number): ActivityPage<UserComment> | undefined {
-        return this.activity.get(`comment:${id}:${page}`) as ActivityPage<UserComment> | undefined;
+    public cachedListing<T extends Story | UserComment>(search: AlgoliaQuery, page: number): ActivityPage<T> | undefined {
+        return this.activity.get(algoliaSearchUrl(search, page)) as ActivityPage<T> | undefined;
     }
 
-    public storiesBy(id: string, page: number): Promise<ActivityPage<Story>> {
-        return this.activityPage(id, 'story', page, storyFromHit);
-    }
-
-    public commentsBy(id: string, page: number): Promise<ActivityPage<UserComment>> {
-        return this.activityPage(id, 'comment', page, commentFromHit);
+    /** A page of an Algolia listing (search, a user's activity, a day's stories, ...), cached by URL. */
+    public listing<T extends Story | UserComment>(search: AlgoliaQuery, page: number): Promise<ActivityPage<T>> {
+        const url = algoliaSearchUrl(search, page);
+        const convert = (search.kind === 'story' ? storyFromHit : commentFromHit) as (hit: AlgoliaSearchPage['hits'][number]) => T;
+        return this.shared(url, async () => {
+            const result = await this.fetchJson<AlgoliaSearchPage>(url);
+            const listingPage: ActivityPage<T> = { page, items: result.hits.map(convert), hasMore: result.page + 1 < result.nbPages };
+            this.activity.set(url, listingPage as ActivityPage<Story> | ActivityPage<UserComment>);
+            return listingPage;
+        });
     }
 
     /** Starts loading a profile (e.g. on hover) so opening it can reuse the requests. */
     public prefetchUser(id: string): void {
         if (!this.users.has(id)) {
             this.user(id).catch(() => undefined);
-            this.storiesBy(id, 0).catch(() => undefined);
+            this.listing(HnSource.activityQuery(id, 'story'), 0).catch(() => undefined);
         }
-    }
-
-    private activityPage<T extends Story | UserComment>(
-        id: string,
-        kind: 'story' | 'comment',
-        page: number,
-        convert: (hit: AlgoliaSearchPage['hits'][number]) => T,
-    ): Promise<ActivityPage<T>> {
-        const key = `${kind}:${id}:${page}`;
-        return this.shared(key, async () => {
-            const result = await this.fetchJson<AlgoliaSearchPage>(algoliaActivityUrl(id, kind, page));
-            const activityPage: ActivityPage<T> = { page, items: result.hits.map(convert), hasMore: result.page + 1 < result.nbPages };
-            this.activity.set(key, activityPage as ActivityPage<Story> | ActivityPage<UserComment>);
-            return activityPage;
-        });
     }
 
     public cachedThread(id: number): Thread | undefined {
@@ -203,6 +196,9 @@ export class HnSource {
         })
             .then((thread) => {
                 this.threads.set(id, thread);
+                // A comment link resolves to its story's thread; reuse it when the story itself opens.
+                this.threads.set(thread.story.id, thread);
+                writeThread(thread).catch(() => undefined);
                 return thread;
             })
             .finally(() => {
