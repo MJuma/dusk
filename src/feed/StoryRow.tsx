@@ -3,6 +3,7 @@ import { useCallback } from 'preact/hooks';
 
 import { itemHref } from '../app/router';
 import { commentsInNewTab, settings } from '../app/settings';
+import { showToast } from '../app/toast';
 import { recordLinkOpen, visits } from '../app/visits';
 import { source } from '../data/source';
 import type { Story } from '../data/types';
@@ -26,6 +27,26 @@ export const StoryRow = memo(function StoryRow({ story, rank }: StoryRowProps) {
     const openLink = useCallback((): void => {
         recordLinkOpen(story.id);
     }, [story.id]);
+    const openBoth = useCallback((event: MouseEvent): void => {
+        if (story.url === null) {
+            return;
+        }
+        recordLinkOpen(story.id);
+        // Modified clicks keep the browser's own behavior for the link (new window, background tab).
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+            return;
+        }
+        event.preventDefault();
+        window.open(story.url, '_blank', 'noopener,noreferrer');
+        // Browsers allow one new tab per click unless pop-ups are allowed for the site.
+        const discussion = new URL(itemHref(story.id), location.href).href;
+        if (!window.open(discussion, '_blank')) {
+            showToast({
+                message: 'Your browser opened only the link. Allow pop-ups for this site to open both at once.',
+                action: { label: 'Open discussion', href: discussion },
+            });
+        }
+    }, [story.id, story.url]);
     const prefetch = useCallback((): void => {
         // A new tab can't reuse this tab's request, so only warm up same-tab opens.
         if (!newTab) {
@@ -56,6 +77,22 @@ export const StoryRow = memo(function StoryRow({ story, rank }: StoryRowProps) {
                 {story.domain && <span class="story-domain">{story.domain}</span>}
                 <div class="story-meta">
                     {story.score} pts · {story.by} · {timeAgo(story.time)}
+                    {story.type !== 'job' && (
+                        <span class="story-actions">
+                            {' · '}
+                            <a href={itemHref(story.id)} target={commentsTarget} rel={commentsRel} onPointerDown={prefetch}>
+                                discuss
+                            </a>
+                            {external && (
+                                <>
+                                    {' · '}
+                                    <a href={story.url ?? undefined} target="_blank" rel="noopener noreferrer" onClick={openBoth} onAuxClick={openLink}>
+                                        link + discuss
+                                    </a>
+                                </>
+                            )}
+                        </span>
+                    )}
                 </div>
             </div>
             {story.type !== 'job' && (

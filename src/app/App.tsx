@@ -3,19 +3,12 @@ import { useLayoutEffect } from 'preact/hooks';
 import { FeedView } from '../feed/FeedView';
 import { ThreadView } from '../thread/ThreadView';
 import { refresh } from './refresh';
-import { FEEDS, feedHref, route } from './router';
-import type { Route } from './router';
+import { FEEDS, feedHref, route, routeKey, savedScroll } from './router';
 import { settingsOpen } from './settings';
 import { SettingsDialog } from './SettingsDialog';
+import { dismissToast, toast } from './toast';
 
 const LABELS = { top: 'Top', new: 'New', best: 'Best', ask: 'Ask', show: 'Show', jobs: 'Jobs' } as const;
-
-const scrollMemory = new Map<string, number>();
-let currentKey = '';
-
-function routeKey(current: Route): string {
-    return current.name === 'item' ? `item:${current.id}` : `feed:${current.kind}:${current.page}`;
-}
 
 const REFRESH_ICON = (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -41,23 +34,66 @@ window.addEventListener('keydown', (event) => {
     }
 });
 
-history.scrollRestoration = 'manual';
-window.addEventListener('hashchange', (event) => {
-    scrollMemory.set(currentKey, window.scrollY);
-    // Opening a link to the current item (e.g. from a comment) should not jump back to a saved spot.
-    if (new URL(event.newURL).hash === new URL(event.oldURL).hash) {
-        scrollMemory.delete(currentKey);
+const RESTORE_TIMEOUT_MS = 5000;
+
+/**
+ * Scrolls back to where the reader was. If the page is still loading and too short, keeps trying
+ * as it grows, until the position is reached, the reader scrolls themselves, or time runs out.
+ */
+function restoreScroll(target: number): (() => void) | undefined {
+    window.scrollTo(0, target);
+    if (window.scrollY >= target - 1) {
+        return undefined;
     }
-});
+    const observer = new ResizeObserver(() => {
+        window.scrollTo(0, target);
+        if (window.scrollY >= target - 1) {
+            stop();
+        }
+    });
+    const timer = window.setTimeout(() => {
+        stop();
+    }, RESTORE_TIMEOUT_MS);
+    const userEvents = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const;
+    function stop(): void {
+        observer.disconnect();
+        clearTimeout(timer);
+        for (const type of userEvents) {
+            window.removeEventListener(type, stop);
+        }
+    }
+    observer.observe(document.body);
+    for (const type of userEvents) {
+        window.addEventListener(type, stop, { passive: true });
+    }
+    return stop;
+}
+
+function ToastView() {
+    const current = toast.value;
+    if (!current) {
+        return null;
+    }
+    return (
+        <output class="toast">
+            <span>{current.message}</span>
+            {current.action && (
+                <a class="toast-action" href={current.action.href} target="_blank" rel="noopener" onClick={dismissToast}>
+                    {current.action.label}
+                </a>
+            )}
+            <button type="button" class="toast-close" aria-label="Dismiss" onClick={dismissToast}>
+                ×
+            </button>
+        </output>
+    );
+}
 
 export function App() {
     const current = route.value;
     const key = routeKey(current);
 
-    useLayoutEffect(() => {
-        currentKey = key;
-        window.scrollTo(0, scrollMemory.get(key) ?? 0);
-    }, [key]);
+    useLayoutEffect(() => restoreScroll(savedScroll(key)), [key]);
 
     const activeFeed = current.name === 'feed' ? current.kind : undefined;
     return (
@@ -84,6 +120,7 @@ export function App() {
                 ? <ThreadView key={key} id={current.id} />
                 : <FeedView key={key} kind={current.kind} page={current.page} />}
             <SettingsDialog />
+            <ToastView />
         </>
     );
 }

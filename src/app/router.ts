@@ -26,8 +26,22 @@ export function itemHref(id: number): string {
     return `#/item/${id}`;
 }
 
+export function routeKey(current: Route): string {
+    return current.name === 'item' ? `item:${current.id}` : `feed:${current.kind}:${current.page}`;
+}
+
 export const route = signal<Route>(parseHash(location.hash));
 
+const scrollPositions = new Map<string, number>();
+
+/** Where the reader was on this page last time, for restoring after back/forward. */
+export function savedScroll(key: string): number {
+    return scrollPositions.get(key) ?? 0;
+}
+
+history.scrollRestoration = 'manual';
 window.addEventListener('hashchange', () => {
+    // Save before changing the route: the new page renders (and scrolls) as soon as this returns.
+    scrollPositions.set(routeKey(route.value), window.scrollY);
     route.value = parseHash(location.hash);
 });

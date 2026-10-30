@@ -29,9 +29,17 @@ interface PendingThread {
     latest: { partial?: Thread };
 }
 
+/** A feed's ranked story ids at one moment. Every page of a listing is cut from the same snapshot. */
+interface FeedSnapshot {
+    at: number;
+    ids: number[];
+}
+
 /** Read access to HN. Everything the UI needs goes through here so the transport can change later. */
 export class HnSource {
-    private readonly feeds = new Map<string, { at: number; page: FeedPage }>();
+    private readonly snapshots = new Map<FeedKind, FeedSnapshot>();
+    private readonly feeds = new Map<string, { snapshot: FeedSnapshot; page: FeedPage }>();
+    private readonly feedRequests = new Map<string, Promise<FeedPage>>();
     private readonly threads = new Map<number, Thread>();
     private readonly inflight = new Map<number, PendingThread>();
 
@@ -41,26 +49,53 @@ export class HnSource {
         return this.feeds.get(`${kind}:${page}`)?.page;
     }
 
-    /** A feed page, reused for a minute unless `force` is set. */
-    public async feed(kind: FeedKind, page: number, signal?: AbortSignal, force = false): Promise<FeedPage> {
+    /**
+     * A page of a feed. Page 0 takes a fresh ranking snapshot once it's a minute old (or when
+     * `force` is set); later pages are cut from that same snapshot, so pages appended with "More"
+     * never repeat or skip stories as the ranking shifts. Requests run to completion even if the
+     * caller goes away, and concurrent callers share them.
+     */
+    public feed(kind: FeedKind, page: number, force = false): Promise<FeedPage> {
         const key = `${kind}:${page}`;
         const cached = this.feeds.get(key);
-        if (!force && cached && Date.now() - cached.at < FEED_FRESH_MS) {
-            return cached.page;
+        const snapshot = this.snapshots.get(kind);
+        const current = cached !== undefined && cached.snapshot === snapshot
+            && (page > 0 || Date.now() - cached.snapshot.at < FEED_FRESH_MS);
+        if (cached && current && !force) {
+            return Promise.resolve(cached.page);
         }
-        const ids = await this.fetchJson<number[]>(feedUrl(kind), signal);
-        const slice = ids.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-        const items = await mapLimit(slice, CONCURRENCY, (id) => this.fetchJson<FirebaseItem | null>(firebaseItemUrl(id), signal));
+        const pending = this.feedRequests.get(key);
+        if (pending && !force) {
+            return pending;
+        }
+        const request = this.loadFeed(kind, page).finally(() => {
+            if (this.feedRequests.get(key) === request) {
+                this.feedRequests.delete(key);
+            }
+        });
+        this.feedRequests.set(key, request);
+        return request;
+    }
+
+    private async loadFeed(kind: FeedKind, page: number): Promise<FeedPage> {
+        let snapshot = this.snapshots.get(kind);
+        if (page === 0 || !snapshot) {
+            snapshot = { at: Date.now(), ids: await this.fetchJson<number[]>(feedUrl(kind)) };
+            this.snapshots.set(kind, snapshot);
+        }
+        const slice = snapshot.ids.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+        const items = await mapLimit(slice, CONCURRENCY, (id) => this.fetchJson<FirebaseItem | null>(firebaseItemUrl(id)));
         const stories = items
             .filter((item): item is FirebaseItem => item !== null && item.deleted !== true && item.dead !== true)
             .map(toStory);
-        const result: FeedPage = { kind, page, stories, hasMore: ids.length > (page + 1) * PAGE_SIZE };
-        this.feeds.set(key, { at: Date.now(), page: result });
+        const result: FeedPage = { kind, page, stories, hasMore: snapshot.ids.length > (page + 1) * PAGE_SIZE };
+        this.feeds.set(`${kind}:${page}`, { snapshot, page: result });
         return result;
     }
 
+    /** The last loaded version of a thread, or the latest snapshot of a load still in flight. */
     public cachedThread(id: number): Thread | undefined {
-        return this.threads.get(id);
+        return this.threads.get(id) ?? this.inflight.get(id)?.latest.partial;
     }
 
     /** Starts loading a thread (e.g. on pointerdown) so opening it can reuse the request. */

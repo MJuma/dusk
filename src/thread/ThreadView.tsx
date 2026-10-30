@@ -61,7 +61,9 @@ export function ThreadView({ id }: ThreadViewProps) {
     const { thread, previous } = loaded;
     const [error, setError] = useState<string>();
     const [toggled, setToggled] = useState<ReadonlySet<number>>(() => new Set());
-    const [rowLimit, setRowLimit] = useState(FIRST_PAINT_ROWS);
+    // A thread already in memory (e.g. coming back to it) renders in full at once, so the
+    // reading position can be restored; a fresh load paints the first screen first.
+    const [rowLimit, setRowLimit] = useState(() => (source.cachedThread(id) ? Number.POSITIVE_INFINITY : FIRST_PAINT_ROWS));
     const [focusId, setFocusId] = useState<number>();
     const [jump, setJump] = useState<{ id: number }>();
     const [currentThread, setCurrentThread] = useState(0);

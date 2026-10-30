@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'preact/hooks';
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'preact/hooks';
 
 import { settings, settingsOpen, updateSettings } from './settings';
 import type { CommentsTarget, ContentWidth, IndentSize } from './settings';
@@ -32,6 +32,12 @@ const SHORTCUTS: readonly [string, string][] = [
     ['c', 'Collapse / expand'],
     ['?', 'This panel'],
 ];
+
+const CLOSE_ICON = (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+);
 
 const setCommentsTarget = (value: string): void => {
     updateSettings({ commentsTarget: value as CommentsTarget });
@@ -76,7 +82,7 @@ export function SettingsDialog() {
     const open = settingsOpen.value;
     const current = settings.value;
 
-    useEffect(() => {
+    useLayoutEffect(() => {
         const element = dialog.current;
         if (open && element && !element.open) {
             element.showModal();
@@ -85,24 +91,57 @@ export function SettingsDialog() {
         }
     }, [open]);
 
+    // Clicking the backdrop closes the panel. The panel's content fills the <dialog>, so only
+    // backdrop clicks target the <dialog> itself; requiring the press to start there too keeps a
+    // text selection that ends outside the panel from closing it.
+    useEffect(() => {
+        const element = dialog.current;
+        if (!element) {
+            return undefined;
+        }
+        let pressedBackdrop = false;
+        const onPointerDown = (event: PointerEvent): void => {
+            pressedBackdrop = event.target === element;
+        };
+        const onClick = (event: MouseEvent): void => {
+            if (pressedBackdrop && event.target === element) {
+                close();
+            }
+            pressedBackdrop = false;
+        };
+        element.addEventListener('pointerdown', onPointerDown);
+        element.addEventListener('click', onClick);
+        return () => {
+            element.removeEventListener('pointerdown', onPointerDown);
+            element.removeEventListener('click', onClick);
+        };
+    }, []);
+
     return (
         <dialog ref={dialog} class="settings" aria-labelledby="settings-title" onClose={close}>
-            <h2 id="settings-title">Settings</h2>
-            <Choice legend="Open comments in" name="comments-target" value={current.commentsTarget} options={COMMENTS_OPTIONS} onChange={setCommentsTarget} />
-            <Choice legend="Content width (laptop)" name="width" value={current.width} options={WIDTH_OPTIONS} onChange={setWidth} />
-            <Choice legend="Reply indent" name="indent" value={current.indent} options={INDENT_OPTIONS} onChange={setIndent} />
-            <h3>Keyboard shortcuts in a thread</h3>
-            <dl class="shortcuts">
-                {SHORTCUTS.map(([keys, action]) => (
-                    <div key={keys}>
-                        <dt>{keys}</dt>
-                        <dd>{action}</dd>
-                    </div>
-                ))}
-            </dl>
-            <button type="button" class="settings-done" onClick={close}>
-                Done
-            </button>
+            <div class="settings-body">
+                <header class="settings-head">
+                    <h2 id="settings-title">Settings</h2>
+                    <button type="button" class="icon-btn settings-close" aria-label="Close settings" onClick={close}>
+                        {CLOSE_ICON}
+                    </button>
+                </header>
+                <Choice legend="Open comments in" name="comments-target" value={current.commentsTarget} options={COMMENTS_OPTIONS} onChange={setCommentsTarget} />
+                <Choice legend="Content width (laptop)" name="width" value={current.width} options={WIDTH_OPTIONS} onChange={setWidth} />
+                <Choice legend="Reply indent" name="indent" value={current.indent} options={INDENT_OPTIONS} onChange={setIndent} />
+                <h3>Keyboard shortcuts in a thread</h3>
+                <dl class="shortcuts">
+                    {SHORTCUTS.map(([keys, action]) => (
+                        <div key={keys}>
+                            <dt>{keys}</dt>
+                            <dd>{action}</dd>
+                        </div>
+                    ))}
+                </dl>
+                <button type="button" class="settings-done" onClick={close}>
+                    Done
+                </button>
+            </div>
         </dialog>
     );
 }
