@@ -62,61 +62,63 @@ export function SaveSheet() {
                             {CLOSE_ICON}
                         </button>
                     </header>
-                    <p class="sheet-story">{story.title}</p>
-                    <dl class="sheet-parts">
-                        <div>
-                            <dt>Comments</dt>
-                            <dd>
-                                <PartStatus
-                                    saving={progress?.saving.has('comments') ?? false}
-                                    error={progress?.errors.comments}
-                                    saved={record?.comments}
-                                    detail={record?.comments ? `${record.comments.count} comments` : undefined}
-                                />
-                            </dd>
-                        </div>
-                        {hasLink && (
+                    <div class="settings-content">
+                        <p class="sheet-story">{story.title}</p>
+                        <dl class="sheet-parts">
                             <div>
-                                <dt>Article text</dt>
+                                <dt>Comments</dt>
                                 <dd>
-                                    <PartStatus saving={progress?.saving.has('article') ?? false} error={progress?.errors.article} saved={record?.article} />
+                                    <PartStatus
+                                        saving={progress?.saving.has('comments') ?? false}
+                                        error={progress?.errors.comments}
+                                        saved={record?.comments}
+                                        detail={record?.comments ? `${record.comments.count} comments` : undefined}
+                                    />
                                 </dd>
                             </div>
-                        )}
-                    </dl>
-                    <div class="sheet-actions">
-                        <button type="button" class="sheet-btn" data-parts="comments" disabled={busy} onClick={save}>
-                            {record?.comments ? 'Update comments' : 'Save comments'}
-                        </button>
-                        {hasLink && (
-                            <>
-                                <button type="button" class="sheet-btn" data-parts="article" disabled={busy} onClick={save}>
-                                    {record?.article ? 'Update article' : 'Save article'}
-                                </button>
-                                <button type="button" class="sheet-btn sheet-primary" data-parts="both" disabled={busy} onClick={save}>
-                                    {record ? 'Update both' : 'Save both'}
-                                </button>
-                            </>
-                        )}
-                    </div>
-                    {record && (
-                        <div class="sheet-links">
-                            {record.article && (
-                                <a href={readHref(story.id)} onClick={close}>
-                                    Read saved article
-                                </a>
+                            {hasLink && (
+                                <div>
+                                    <dt>Article text</dt>
+                                    <dd>
+                                        <PartStatus saving={progress?.saving.has('article') ?? false} error={progress?.errors.article} saved={record?.article} />
+                                    </dd>
+                                </div>
                             )}
-                            {record.comments && (
-                                <a href={itemHref(story.id)} onClick={close}>
-                                    Open comments
-                                </a>
-                            )}
-                            <button type="button" class="link-btn sheet-remove" disabled={busy} onClick={remove}>
-                                Remove
+                        </dl>
+                        <div class="sheet-actions">
+                            <button type="button" class="sheet-btn" data-parts="comments" disabled={busy} onClick={save}>
+                                {record?.comments ? 'Update comments' : 'Save comments'}
                             </button>
+                            {hasLink && (
+                                <>
+                                    <button type="button" class="sheet-btn" data-parts="article" disabled={busy} onClick={save}>
+                                        {record?.article ? 'Update article' : 'Save article'}
+                                    </button>
+                                    <button type="button" class="sheet-btn sheet-primary" data-parts="both" disabled={busy} onClick={save}>
+                                        {record ? 'Update both' : 'Save both'}
+                                    </button>
+                                </>
+                            )}
                         </div>
-                    )}
-                    <p class="sheet-note">Saved stories stay on this device until you remove them. Article text comes from a reader service, so images need a connection.</p>
+                        {record && (
+                            <div class="sheet-links">
+                                {record.article && (
+                                    <a href={readHref(story.id)} onClick={close}>
+                                        Read saved article
+                                    </a>
+                                )}
+                                {record.comments && (
+                                    <a href={itemHref(story.id)} onClick={close}>
+                                        Open comments
+                                    </a>
+                                )}
+                                <button type="button" class="link-btn sheet-remove" disabled={busy} onClick={remove}>
+                                    Remove
+                                </button>
+                            </div>
+                        )}
+                        <p class="sheet-note">Saved stories stay on this device until you remove them. Article text comes from a reader service, so images need a connection.</p>
+                    </div>
                 </div>
             )}
         </dialog>

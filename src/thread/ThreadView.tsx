@@ -29,10 +29,10 @@ const FIRST_PAINT_ROWS = 80;
 /** A new comment counts as seen once it has been on screen this long. */
 const SEEN_DWELL_MS = 400;
 const SEEN_FLUSH_MS = 600;
-/** A horizontal swipe this long (and this straight) on a comment collapses or expands it. */
+/** A horizontal swipe this long on a comment collapses or expands it. */
 const SWIPE_MIN_PX = 70;
-const SWIPE_MAX_DRIFT_PX = 40;
-const SWIPE_MAX_MS = 700;
+/** Movement before deciding whether a touch is a swipe (horizontal) or a scroll (vertical). */
+const SWIPE_LOCK_PX = 8;
 /** Touches starting this close to the left edge belong to the system back gesture. */
 const EDGE_PX = 24;
 
@@ -310,69 +310,166 @@ export function ThreadView({ id, focus }: ThreadViewProps) {
             }
             return ancestor;
         };
-        const onClick = (event: MouseEvent): void => {
-            // Clicks on a comment's text land on its children; only the rail area hits the article itself.
-            const article = event.target instanceof HTMLElement && event.target.matches('article.c') ? event.target : undefined;
+
+        /** The comment whose rail is nearest a press in a comment's rail area (its left padding). */
+        const railTarget = (target: EventTarget | null, clientX: number): ThreadComment | undefined => {
+            // Presses on a comment's text land on its children; only the rail area hits the article itself.
+            const article = target instanceof HTMLElement && target.matches('article.c') ? target : undefined;
             const comment = article ? commentFor(article) : undefined;
             if (!article || !comment) {
-                return;
+                return undefined;
             }
             const style = getComputedStyle(article);
             const railsEnd = parseFloat(style.paddingLeft);
-            const x = event.clientX - article.getBoundingClientRect().left;
+            const x = clientX - article.getBoundingClientRect().left;
             if (x >= railsEnd) {
-                return;
+                return undefined;
             }
             const indent = parseFloat(style.getPropertyValue('--indent'));
             const gutter = railsEnd - comment.depth * indent - parseFloat(style.getPropertyValue('--rail-gap'));
-            const level = Math.max(0, Math.min(comment.depth, Math.round((x - gutter) / indent)));
-            const target = ancestorAt(comment, level);
+            return ancestorAt(comment, Math.max(0, Math.min(comment.depth, Math.round((x - gutter) / indent))));
+        };
+        // While a rail is pressed, highlight the comment it would collapse.
+        let pressed: Element | null = null;
+        const release = (): void => {
+            pressed?.classList.remove('c-rail-target');
+            pressed = null;
+        };
+        const onPointerDown = (event: PointerEvent): void => {
+            release();
+            const target = railTarget(event.target, event.clientX);
+            pressed = target ? rowElement(target.id) : null;
+            pressed?.classList.add('c-rail-target');
+        };
+        const onClick = (event: MouseEvent): void => {
+            release();
+            const target = railTarget(event.target, event.clientX);
             if (target) {
                 toggle(target.id);
                 jumpTo(target.id);
             }
         };
-        let swipe: { x: number; y: number; at: number; element: Element } | undefined;
+
+        /** What a swipe on `comment` would do: collapse it (or its parent, if it has no replies), or expand it. */
+        const swipeAction = (comment: ThreadComment, direction: 'left' | 'right'): { target: ThreadComment; label: string } | undefined => {
+            const collapsed = isCollapsed(comment, latestRef.current.toggled);
+            if (direction === 'right') {
+                return collapsed ? { target: comment, label: 'Expand' } : undefined;
+            }
+            if (!collapsed && comment.descendantCount > 0) {
+                return { target: comment, label: 'Collapse' };
+            }
+            const parent = comment.depth > 0 ? ancestorAt(comment, comment.depth - 1) : undefined;
+            return parent ? { target: parent, label: 'Collapse parent' } : undefined;
+        };
+        interface Swipe {
+            x: number;
+            y: number;
+            element: HTMLElement;
+            comment: ThreadComment;
+            axis?: 'x' | 'y';
+            action?: { target: ThreadComment; label: string };
+            armed: boolean;
+        }
+        let swipe: Swipe | undefined;
+        const settle = (element: HTMLElement): void => {
+            element.style.transition = 'transform 0.2s ease-out';
+            element.style.transform = '';
+            element.classList.remove('c-swipe-left', 'c-swipe-right', 'c-swipe-armed');
+            delete element.dataset['swipe'];
+            element.addEventListener('transitionend', () => {
+                element.style.transition = '';
+            }, { once: true });
+        };
         const onTouchStart = (event: TouchEvent): void => {
             const touch = event.touches[0];
             const target = event.target instanceof Element ? event.target : undefined;
-            const article = target?.closest('article.c');
-            swipe = event.touches.length === 1 && touch && article && touch.clientX > EDGE_PX && !target?.closest('pre, table, a, button')
-                ? { x: touch.clientX, y: touch.clientY, at: event.timeStamp, element: article }
+            const article = target?.closest<HTMLElement>('article.c');
+            const comment = article ? commentFor(article) : undefined;
+            swipe = event.touches.length === 1 && touch && article && comment && touch.clientX > EDGE_PX && !target?.closest('pre, table, a, button')
+                ? { x: touch.clientX, y: touch.clientY, element: article, comment, armed: false }
                 : undefined;
         };
-        const onTouchEnd = (event: TouchEvent): void => {
-            const start = swipe;
-            swipe = undefined;
-            const touch = event.changedTouches[0];
-            if (!start || !touch) {
+        const onTouchMove = (event: TouchEvent): void => {
+            const touch = event.touches[0];
+            if (!swipe || !touch) {
                 return;
             }
-            const dx = touch.clientX - start.x;
-            if (Math.abs(dx) < SWIPE_MIN_PX || Math.abs(touch.clientY - start.y) > SWIPE_MAX_DRIFT_PX || event.timeStamp - start.at > SWIPE_MAX_MS) {
+            const dx = touch.clientX - swipe.x;
+            const dy = touch.clientY - swipe.y;
+            if (!swipe.axis) {
+                if (Math.abs(dx) < SWIPE_LOCK_PX && Math.abs(dy) < SWIPE_LOCK_PX) {
+                    return;
+                }
+                // Mostly-horizontal drags are swipes; anything else is scrolling.
+                swipe.axis = Math.abs(dx) > Math.abs(dy) * 1.2 ? 'x' : 'y';
+                if (swipe.axis === 'y') {
+                    return;
+                }
+            }
+            if (swipe.axis !== 'x') {
                 return;
             }
-            let comment = commentFor(start.element);
-            if (!comment) {
-                return;
-            }
-            const collapsed = isCollapsed(comment, latestRef.current.toggled);
-            if (dx < 0 && !collapsed && comment.descendantCount === 0 && comment.depth > 0) {
-                // A reply with no replies of its own: collapse the conversation it belongs to.
-                comment = ancestorAt(comment, comment.depth - 1);
-            }
-            if (comment && (dx < 0) !== isCollapsed(comment, latestRef.current.toggled)) {
-                toggle(comment.id);
-                setFocusId(comment.id);
+            const { element } = swipe;
+            swipe.action = swipeAction(swipe.comment, dx < 0 ? 'left' : 'right');
+            swipe.armed = swipe.action !== undefined && Math.abs(dx) >= SWIPE_MIN_PX;
+            // Follow the finger; past the threshold (or with nothing to do) add resistance.
+            const distance = Math.abs(dx);
+            const resisted = swipe.action
+                ? (distance <= SWIPE_MIN_PX ? distance : SWIPE_MIN_PX + (distance - SWIPE_MIN_PX) * 0.6)
+                : distance * 0.15;
+            element.style.transition = 'none';
+            element.style.transform = `translateX(${Math.sign(dx) * resisted}px)`;
+            element.style.setProperty('--swipe-y', `${Math.round(touch.clientY - element.getBoundingClientRect().top)}px`);
+            element.classList.toggle('c-swipe-left', dx < 0);
+            element.classList.toggle('c-swipe-right', dx > 0);
+            element.classList.toggle('c-swipe-armed', swipe.armed);
+            if (swipe.action) {
+                element.dataset['swipe'] = swipe.action.label;
+            } else {
+                delete element.dataset['swipe'];
             }
         };
+        const onTouchEnd = (): void => {
+            const done = swipe;
+            swipe = undefined;
+            if (!done || done.axis !== 'x') {
+                return;
+            }
+            settle(done.element);
+            if (done.armed && done.action) {
+                const { target } = done.action;
+                toggle(target.id);
+                if (target === done.comment) {
+                    setFocusId(target.id);
+                } else {
+                    jumpTo(target.id);
+                }
+            }
+        };
+        const onTouchCancel = (): void => {
+            if (swipe?.axis === 'x') {
+                settle(swipe.element);
+            }
+            swipe = undefined;
+        };
+        section.addEventListener('pointerdown', onPointerDown);
+        section.addEventListener('pointerup', release);
+        section.addEventListener('pointercancel', release);
         section.addEventListener('click', onClick);
         section.addEventListener('touchstart', onTouchStart, { passive: true });
+        section.addEventListener('touchmove', onTouchMove, { passive: true });
         section.addEventListener('touchend', onTouchEnd, { passive: true });
+        section.addEventListener('touchcancel', onTouchCancel, { passive: true });
         return () => {
+            section.removeEventListener('pointerdown', onPointerDown);
+            section.removeEventListener('pointerup', release);
+            section.removeEventListener('pointercancel', release);
             section.removeEventListener('click', onClick);
             section.removeEventListener('touchstart', onTouchStart);
+            section.removeEventListener('touchmove', onTouchMove);
             section.removeEventListener('touchend', onTouchEnd);
+            section.removeEventListener('touchcancel', onTouchCancel);
         };
     }, [toggle, jumpTo, thread]);
 

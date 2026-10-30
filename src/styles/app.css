@@ -120,12 +120,25 @@
 }
 
 /* Reply indent per level. HN uses 40px on desktop and 12px on phones. */
+:root,
+:root[data-indent='normal'] {
+    --indent: 16px;
+}
+
 :root[data-indent='compact'] {
-    --indent: 10px;
+    --indent: 12px;
 }
 
 :root[data-indent='wide'] {
-    --indent: 18px;
+    --indent: 22px;
+}
+
+/* Fingers need bigger targets: thicker rails and more room between a comment's rail and its text. */
+@media (pointer: coarse) {
+    :root {
+        --rail: 3px;
+        --rail-gap: 12px;
+    }
 }
 
 @media (min-width: 720px) {
@@ -660,6 +673,52 @@ a.story-domain:hover {
     padding-top: 0.6rem;
 }
 
+/* While a rail is pressed, light up the comment it would collapse. */
+.c.c-rail-target {
+    --tint: color-mix(in srgb, var(--tone) 26%, transparent);
+}
+
+/*
+ * Swiping a comment: it follows the finger and shows what letting go will do; the label turns
+ * accent-colored once the swipe is far enough to count.
+ */
+.comments {
+    overflow-x: clip;
+    touch-action: pan-y pinch-zoom;
+}
+
+.c[data-swipe]::after {
+    content: attr(data-swipe);
+    position: absolute;
+    top: clamp(1rem, var(--swipe-y, 1rem), calc(100% - 1rem));
+    padding: 0.3rem 0.65rem;
+    transform: translateY(-50%);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--muted);
+    font-size: 0.75em;
+    font-weight: 700;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+.c-swipe-left::after {
+    left: calc(100% + 8px);
+}
+
+.c-swipe-right::after {
+    right: calc(100% + 8px);
+}
+
+.c.c-swipe-armed {
+    --tint: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.c[data-swipe].c-swipe-armed::after {
+    background: var(--accent);
+    color: var(--on-accent);
+}
+
 /* New comments get an accent bar at the row's left edge (the cards already use the background). */
 .c-new {
     box-shadow: inset 3px 0 0 var(--accent);
@@ -822,11 +881,11 @@ a.story-domain:hover {
 /* ── Settings ────────────────────────────────────────────── */
 
 .settings {
-    width: min(30rem, calc(100vw - 2rem));
-    max-height: calc(100dvh - 2rem);
+    width: min(30rem, calc(100vw - 1.5rem));
+    max-height: none;
     /* The body fills the dialog, so a click on the dialog element itself is a backdrop click. */
     padding: 0;
-    overflow-y: auto;
+    overflow: hidden;
     border: 1px solid var(--border);
     border-radius: 12px;
     background: var(--raised);
@@ -837,15 +896,46 @@ a.story-domain:hover {
     background: rgb(0 0 0 / 0.5);
 }
 
+/*
+ * Header (with the close button) and footer stay put; only the middle scrolls. The height keeps
+ * clear of the notch/status bar and home indicator, which the installed iPhone app draws under.
+ */
 .settings-body {
-    padding: 0.75rem 1.25rem 1rem;
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100dvh - 2 * max(env(safe-area-inset-top), env(safe-area-inset-bottom)) - 1.5rem);
 }
 
 .settings-head {
     display: flex;
+    flex: none;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 0.5rem;
+    padding: 0.6rem 1.25rem 0.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.settings-content {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 0.75rem 1.25rem 1rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.settings-foot {
+    display: flex;
+    flex: none;
+    justify-content: flex-end;
+    padding: 0.6rem 1.25rem;
+    border-top: 1px solid var(--border);
+}
+
+/* Width and keyboard shortcuts only matter on a laptop. */
+@media (pointer: coarse) {
+    .laptop-only {
+        display: none;
+    }
 }
 
 .settings-close {
@@ -957,7 +1047,7 @@ a.story-domain:hover {
 
 .settings-done {
     display: block;
-    margin: 1rem 0 0 auto;
+    margin: 0;
     padding: 0.45rem 1.1rem;
     border: 0;
     border-radius: 8px;

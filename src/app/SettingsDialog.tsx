@@ -112,23 +112,31 @@ export function SettingsDialog() {
                         {CLOSE_ICON}
                     </button>
                 </header>
-                <Choice legend="Theme" name="theme" value={current.theme} options={THEME_OPTIONS} onChange={setTheme} />
-                <Choice legend="Thumbnails" name="thumbnails" value={current.thumbnails} options={THUMBNAIL_OPTIONS} onChange={setThumbnails} />
-                <Choice legend="Open comments in" name="comments-target" value={current.commentsTarget} options={COMMENTS_OPTIONS} onChange={setCommentsTarget} />
-                <Choice legend="Content width (laptop)" name="width" value={current.width} options={WIDTH_OPTIONS} onChange={setWidth} />
-                <Choice legend="Reply indent" name="indent" value={current.indent} options={INDENT_OPTIONS} onChange={setIndent} />
-                <h3>Keyboard shortcuts in a thread</h3>
-                <dl class="shortcuts">
-                    {SHORTCUTS.map(([keys, action]) => (
-                        <div key={keys}>
-                            <dt>{keys}</dt>
-                            <dd>{action}</dd>
-                        </div>
-                    ))}
-                </dl>
-                <button type="button" class="settings-done" onClick={close}>
-                    Done
-                </button>
+                <div class="settings-content">
+                    <Choice legend="Theme" name="theme" value={current.theme} options={THEME_OPTIONS} onChange={setTheme} />
+                    <Choice legend="Thumbnails" name="thumbnails" value={current.thumbnails} options={THUMBNAIL_OPTIONS} onChange={setThumbnails} />
+                    <Choice legend="Open comments in" name="comments-target" value={current.commentsTarget} options={COMMENTS_OPTIONS} onChange={setCommentsTarget} />
+                    <div class="laptop-only">
+                        <Choice legend="Content width (laptop)" name="width" value={current.width} options={WIDTH_OPTIONS} onChange={setWidth} />
+                    </div>
+                    <Choice legend="Reply indent" name="indent" value={current.indent} options={INDENT_OPTIONS} onChange={setIndent} />
+                    <section class="laptop-only">
+                        <h3>Keyboard shortcuts in a thread</h3>
+                        <dl class="shortcuts">
+                            {SHORTCUTS.map(([keys, action]) => (
+                                <div key={keys}>
+                                    <dt>{keys}</dt>
+                                    <dd>{action}</dd>
+                                </div>
+                            ))}
+                        </dl>
+                    </section>
+                </div>
+                <footer class="settings-foot">
+                    <button type="button" class="settings-done" onClick={close}>
+                        Done
+                    </button>
+                </footer>
             </div>
         </dialog>
     );
