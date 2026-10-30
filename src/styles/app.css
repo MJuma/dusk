@@ -679,8 +679,10 @@ a.story-domain:hover {
 }
 
 /*
- * Swiping a comment: it follows the finger and shows what letting go will do; the label turns
- * accent-colored once the swipe is far enough to count.
+ * Swiping a comment: it slides away and uncovers a strip, in the space it moved out of, saying what
+ * letting go will do. The label sits still at the screen edge and mid-way down the comment's
+ * on-screen part, so the comment slides off it; the strip turns accent-colored once the swipe
+ * is far enough to count.
  */
 .comments {
     overflow-x: clip;
@@ -690,28 +692,35 @@ a.story-domain:hover {
 .c[data-swipe]::after {
     content: attr(data-swipe);
     position: absolute;
-    top: clamp(1rem, var(--swipe-y, 1rem), calc(100% - 1rem));
-    padding: 0.3rem 0.65rem;
-    transform: translateY(-50%);
-    border-radius: 999px;
-    background: var(--surface);
+    top: 0;
+    bottom: 0;
+    width: var(--swipe-dx, 0);
+    box-sizing: border-box;
+    display: flex;
+    align-items: flex-start;
+    padding: max(0px, calc(var(--swipe-y, 1rem) - 0.5rem)) 0.75rem 0;
+    overflow: hidden;
+    background: var(--raised);
     color: var(--muted);
-    font-size: 0.75em;
+    font-size: 0.8rem;
     font-weight: 700;
+    line-height: 1rem;
     white-space: nowrap;
     pointer-events: none;
 }
 
 .c-swipe-left::after {
-    left: calc(100% + 8px);
+    left: 100%;
+    justify-content: flex-end;
 }
 
 .c-swipe-right::after {
-    right: calc(100% + 8px);
+    right: 100%;
+    justify-content: flex-start;
 }
 
 .c.c-swipe-armed {
-    --tint: color-mix(in srgb, var(--accent) 16%, transparent);
+    --tint: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 .c[data-swipe].c-swipe-armed::after {

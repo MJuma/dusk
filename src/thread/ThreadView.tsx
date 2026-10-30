@@ -290,8 +290,8 @@ export function ThreadView({ id, focus }: ThreadViewProps) {
         navigate('skim');
     }, [navigate]);
 
-    // Tap a rail to collapse (or expand) the comment at that level; swipe a comment left to
-    // collapse it and right to expand it. Both are delegated from the comment list.
+    // Tap a rail to collapse (or expand) the comment at that level; swipe a comment either way to
+    // collapse it (or expand it, if collapsed). Both are delegated from the comment list.
     const commentsRef = useRef<HTMLElement>(null);
     useEffect(() => {
         const section = commentsRef.current;
@@ -350,36 +350,34 @@ export function ThreadView({ id, focus }: ThreadViewProps) {
             }
         };
 
-        /** What a swipe on `comment` would do: collapse it (or its parent, if it has no replies), or expand it. */
-        const swipeAction = (comment: ThreadComment, direction: 'left' | 'right'): { target: ThreadComment; label: string } | undefined => {
-            const collapsed = isCollapsed(comment, latestRef.current.toggled);
-            if (direction === 'right') {
-                return collapsed ? { target: comment, label: 'Expand' } : undefined;
-            }
-            if (!collapsed && comment.descendantCount > 0) {
-                return { target: comment, label: 'Collapse' };
-            }
-            const parent = comment.depth > 0 ? ancestorAt(comment, comment.depth - 1) : undefined;
-            return parent ? { target: parent, label: 'Collapse parent' } : undefined;
-        };
         interface Swipe {
             x: number;
             y: number;
             element: HTMLElement;
             comment: ThreadComment;
             axis?: 'x' | 'y';
-            action?: { target: ThreadComment; label: string };
             armed: boolean;
         }
         let swipe: Swipe | undefined;
         const settle = (element: HTMLElement): void => {
             element.style.transition = 'transform 0.2s ease-out';
             element.style.transform = '';
+            element.style.removeProperty('--swipe-dx');
             element.classList.remove('c-swipe-left', 'c-swipe-right', 'c-swipe-armed');
             delete element.dataset['swipe'];
             element.addEventListener('transitionend', () => {
                 element.style.transition = '';
             }, { once: true });
+        };
+        /** Start showing a swipe: label it, and place the label mid-way down the comment's on-screen part. */
+        const beginSwipe = (current: Swipe): void => {
+            const { element, comment } = current;
+            element.dataset['swipe'] = isCollapsed(comment, latestRef.current.toggled) ? 'Expand' : 'Collapse';
+            const rect = element.getBoundingClientRect();
+            const top = Math.max(rect.top, stickyBottom());
+            const bottom = Math.min(rect.bottom, window.innerHeight);
+            const middle = bottom > top ? (top + bottom) / 2 : rect.top + rect.height / 2;
+            element.style.setProperty('--swipe-y', `${Math.round(middle - rect.top)}px`);
         };
         const onTouchStart = (event: TouchEvent): void => {
             const touch = event.touches[0];
@@ -406,29 +404,23 @@ export function ThreadView({ id, focus }: ThreadViewProps) {
                 if (swipe.axis === 'y') {
                     return;
                 }
+                beginSwipe(swipe);
             }
             if (swipe.axis !== 'x') {
                 return;
             }
             const { element } = swipe;
-            swipe.action = swipeAction(swipe.comment, dx < 0 ? 'left' : 'right');
-            swipe.armed = swipe.action !== undefined && Math.abs(dx) >= SWIPE_MIN_PX;
-            // Follow the finger; past the threshold (or with nothing to do) add resistance.
+            swipe.armed = Math.abs(dx) >= SWIPE_MIN_PX;
+            // Follow the finger, with resistance past the threshold.
             const distance = Math.abs(dx);
-            const resisted = swipe.action
-                ? (distance <= SWIPE_MIN_PX ? distance : SWIPE_MIN_PX + (distance - SWIPE_MIN_PX) * 0.6)
-                : distance * 0.15;
+            const moved = Math.round(distance <= SWIPE_MIN_PX ? distance : SWIPE_MIN_PX + (distance - SWIPE_MIN_PX) * 0.6);
             element.style.transition = 'none';
-            element.style.transform = `translateX(${Math.sign(dx) * resisted}px)`;
-            element.style.setProperty('--swipe-y', `${Math.round(touch.clientY - element.getBoundingClientRect().top)}px`);
+            element.style.transform = `translateX(${Math.sign(dx) * moved}px)`;
+            // The strip behind the label fills exactly the space the comment has moved out of.
+            element.style.setProperty('--swipe-dx', `${moved}px`);
             element.classList.toggle('c-swipe-left', dx < 0);
             element.classList.toggle('c-swipe-right', dx > 0);
             element.classList.toggle('c-swipe-armed', swipe.armed);
-            if (swipe.action) {
-                element.dataset['swipe'] = swipe.action.label;
-            } else {
-                delete element.dataset['swipe'];
-            }
         };
         const onTouchEnd = (): void => {
             const done = swipe;
@@ -437,13 +429,14 @@ export function ThreadView({ id, focus }: ThreadViewProps) {
                 return;
             }
             settle(done.element);
-            if (done.armed && done.action) {
-                const { target } = done.action;
-                toggle(target.id);
-                if (target === done.comment) {
-                    setFocusId(target.id);
+            if (done.armed) {
+                const { comment, element } = done;
+                toggle(comment.id);
+                // Collapsing a comment whose top is scrolled away would leave its header off screen.
+                if (element.getBoundingClientRect().top < stickyBottom()) {
+                    jumpTo(comment.id);
                 } else {
-                    jumpTo(target.id);
+                    setFocusId(comment.id);
                 }
             }
         };
