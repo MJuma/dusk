@@ -1,6 +1,7 @@
 import { memo } from 'preact/compat';
 import { useCallback, useMemo } from 'preact/hooks';
 
+import { userHref } from '../app/router';
 import { hnItemUrl, hnReplyUrl } from '../data/hn';
 import type { ThreadComment } from '../data/types';
 import { sanitizeHnHtml } from '../lib/sanitize';
@@ -66,7 +67,11 @@ export const CommentRow = memo(function CommentRow({ comment, storyId, isOp, col
                 <button class="c-toggle" type="button" aria-expanded={!collapsed} onClick={toggle}>
                     {toggleLabel(comment, collapsed, newInside)}
                 </button>
-                {comment.author && <span class={isOp ? 'c-author c-op' : 'c-author'}>{comment.author}</span>}
+                {comment.author && (
+                    <a class={isOp ? 'c-author c-op' : 'c-author'} href={userHref(comment.author)}>
+                        {comment.author}
+                    </a>
+                )}
                 <span class="c-age">{timeAgo(comment.time)}</span>
                 {isNew && <span class="c-new-badge">new</span>}
                 {NAV_LABELS.map((label) => {

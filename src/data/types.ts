@@ -80,3 +80,50 @@ export interface Thread {
 }
 
 export type FeedKind = 'top' | 'new' | 'best' | 'ask' | 'show' | 'jobs';
+
+/** User shape from the Firebase API (`/v0/user/<id>.json`). */
+export interface UserProfile {
+    id: string;
+    /** Unix seconds. */
+    created: number;
+    karma: number;
+    /** HN-formatted HTML. Must be sanitized before rendering. */
+    about?: string;
+}
+
+/** A user's comment from Algolia, with the story it belongs to. */
+export interface UserComment {
+    id: number;
+    storyId: number;
+    storyTitle: string;
+    /** Raw HN comment HTML. Must be sanitized before rendering. */
+    html: string;
+    time: number;
+}
+
+export interface ActivityPage<T> {
+    page: number;
+    items: T[];
+    hasMore: boolean;
+}
+
+/** A search hit from Algolia's `search_by_date` (story and comment fields share one shape). */
+export interface AlgoliaHit {
+    objectID: string;
+    author: string;
+    created_at_i: number;
+    title?: string | null;
+    url?: string | null;
+    points?: number | null;
+    num_comments?: number | null;
+    story_text?: string | null;
+    story_id?: number | null;
+    story_title?: string | null;
+    comment_text?: string | null;
+}
+
+export interface AlgoliaSearchPage {
+    hits: AlgoliaHit[];
+    page: number;
+    nbPages: number;
+}

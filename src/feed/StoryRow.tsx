@@ -1,7 +1,7 @@
 import { memo } from 'preact/compat';
 import { useCallback } from 'preact/hooks';
 
-import { itemHref } from '../app/router';
+import { itemHref, userHref } from '../app/router';
 import { commentsInNewTab, settings } from '../app/settings';
 import { showToast } from '../app/toast';
 import { recordLinkOpen, visits } from '../app/visits';
@@ -56,6 +56,12 @@ export const StoryRow = memo(function StoryRow({ story, rank }: StoryRowProps) {
         }
     }, [story.id, newTab]);
 
+    const prefetchUser = useCallback((): void => {
+        if (!newTab) {
+            source.prefetchUser(story.by);
+        }
+    }, [story.by, newTab]);
+
     const commentsTarget = newTab ? '_blank' : undefined;
     const commentsRel = newTab ? 'noopener' : undefined;
     let commentsLabel = `${story.descendants} comments`;
@@ -95,7 +101,11 @@ export const StoryRow = memo(function StoryRow({ story, rank }: StoryRowProps) {
                 </a>
                 {story.domain && <span class="story-domain">{story.domain}</span>}
                 <div class="story-meta">
-                    {story.score} pts · {story.by} · {timeAgo(story.time)}
+                    {story.score} pts ·{' '}
+                    <a class="story-by" href={userHref(story.by)} target={commentsTarget} rel={commentsRel} onPointerDown={prefetchUser} onMouseEnter={prefetchUser}>
+                        {story.by}
+                    </a>
+                    {' '}· {timeAgo(story.time)}
                     {story.type !== 'job' && (
                         <span class="story-actions">
                             {' · '}

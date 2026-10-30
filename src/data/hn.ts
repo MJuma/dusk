@@ -1,4 +1,4 @@
-import type { FeedKind, FirebaseItem, Story } from './types';
+import type { AlgoliaHit, FeedKind, FirebaseItem, Story, UserComment } from './types';
 
 export const FIREBASE = 'https://hacker-news.firebaseio.com/v0';
 export const ALGOLIA = 'https://hn.algolia.com/api/v1';
@@ -19,6 +19,21 @@ export function firebaseItemUrl(id: number): string {
 
 export function algoliaItemUrl(id: number): string {
     return `${ALGOLIA}/items/${id}`;
+}
+
+export function firebaseUserUrl(id: string): string {
+    return `${FIREBASE}/user/${encodeURIComponent(id)}.json`;
+}
+
+export const ACTIVITY_PAGE_SIZE = 30;
+
+const ACTIVITY_FIELDS = 'title,url,points,num_comments,story_text,story_id,story_title,comment_text,created_at_i,author';
+
+/** A user's stories or comments, newest first. */
+export function algoliaActivityUrl(user: string, kind: 'story' | 'comment', page: number): string {
+    const tags = encodeURIComponent(`${kind},author_${user}`);
+    return `${ALGOLIA}/search_by_date?tags=${tags}&hitsPerPage=${ACTIVITY_PAGE_SIZE}&page=${page}`
+        + `&attributesToRetrieve=${ACTIVITY_FIELDS}&attributesToHighlight=&attributesToSnippet=`;
 }
 
 export function feedUrl(kind: FeedKind): string {
@@ -69,5 +84,31 @@ export function toStory(item: FirebaseItem): Story {
         time: item.time ?? 0,
         descendants: item.descendants ?? 0,
         text: item.text ?? null,
+    };
+}
+
+export function storyFromHit(hit: AlgoliaHit): Story {
+    const url = hit.url || null;
+    return {
+        id: Number(hit.objectID),
+        type: 'story',
+        title: hit.title ?? '',
+        url,
+        domain: domainOf(url ?? undefined),
+        by: hit.author,
+        score: hit.points ?? 0,
+        time: hit.created_at_i,
+        descendants: hit.num_comments ?? 0,
+        text: hit.story_text ?? null,
+    };
+}
+
+export function commentFromHit(hit: AlgoliaHit): UserComment {
+    return {
+        id: Number(hit.objectID),
+        storyId: hit.story_id ?? Number(hit.objectID),
+        storyTitle: hit.story_title ?? '',
+        html: hit.comment_text ?? '',
+        time: hit.created_at_i,
     };
 }

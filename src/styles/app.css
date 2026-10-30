@@ -297,7 +297,18 @@ svg {
 }
 
 .story-thumbs {
-    grid-template-columns: 1.8em var(--thumb-w) 1fr auto;
+    grid-template-columns: 2.2em var(--thumb-w) 1fr auto;
+}
+
+/* With thumbnails, the rank sits centered beside the thumbnail, a little larger (like old.reddit). */
+.story-thumbs .story-rank {
+    display: grid;
+    place-items: center;
+    height: var(--thumb-h);
+    margin-top: 0.15em;
+    padding-top: 0;
+    font-size: 1.1em;
+    font-weight: 500;
 }
 
 .thumb {
@@ -371,6 +382,15 @@ svg {
 
 .story-meta a {
     color: var(--muted);
+}
+
+.story-by {
+    text-decoration: none;
+}
+
+.story-by:hover {
+    color: var(--title);
+    text-decoration: underline;
 }
 
 .story-comments {
@@ -602,6 +622,15 @@ svg {
 .c-author {
     color: var(--text);
     font-weight: 600;
+    text-decoration: none;
+}
+
+.c-author:hover {
+    text-decoration: underline;
+}
+
+.c-story {
+    color: var(--title);
 }
 
 .c-op {
@@ -905,4 +934,12 @@ svg {
     color: var(--muted);
     font-size: 1.2em;
     cursor: pointer;
+}
+
+/* ── Profile ─────────────────────────────────────────────── */
+
+.user-tabs {
+    display: flex;
+    gap: 0.15rem;
+    margin-top: 0.75rem;
 }

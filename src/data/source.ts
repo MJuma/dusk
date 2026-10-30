@@ -1,8 +1,8 @@
-import { feedUrl, firebaseItemUrl, toStory } from './hn';
+import { algoliaActivityUrl, commentFromHit, feedUrl, firebaseItemUrl, firebaseUserUrl, storyFromHit, toStory } from './hn';
 import { mapLimit } from './limit';
 import { loadThread } from './thread.loader';
 import type { FetchJson } from './thread.loader';
-import type { FeedKind, FirebaseItem, Story, Thread } from './types';
+import type { ActivityPage, AlgoliaSearchPage, FeedKind, FirebaseItem, Story, Thread, UserComment, UserProfile } from './types';
 
 export const PAGE_SIZE = 30;
 const FEED_FRESH_MS = 60_000;
@@ -42,6 +42,9 @@ export class HnSource {
     private readonly feedRequests = new Map<string, Promise<FeedPage>>();
     private readonly threads = new Map<number, Thread>();
     private readonly inflight = new Map<number, PendingThread>();
+    private readonly users = new Map<string, UserProfile | null>();
+    private readonly requests = new Map<string, Promise<unknown>>();
+    private readonly activity = new Map<string, ActivityPage<Story> | ActivityPage<UserComment>>();
 
     public constructor(private readonly fetchJson: FetchJson) {}
 
@@ -94,6 +97,71 @@ export class HnSource {
     }
 
     /** The last loaded version of a thread, or the latest snapshot of a load still in flight. */
+    /** Shares a request between concurrent callers; it runs to completion even if they go away. */
+    private shared<T>(key: string, load: () => Promise<T>): Promise<T> {
+        const pending = this.requests.get(key) as Promise<T> | undefined;
+        if (pending) {
+            return pending;
+        }
+        const request = load().finally(() => {
+            this.requests.delete(key);
+        });
+        this.requests.set(key, request);
+        return request;
+    }
+
+    /** A user's profile; `null` when there is no such user. `undefined` means not loaded yet. */
+    public cachedUser(id: string): UserProfile | null | undefined {
+        return this.users.get(id);
+    }
+
+    public user(id: string): Promise<UserProfile | null> {
+        return this.shared(`user:${id}`, async () => {
+            const profile = await this.fetchJson<UserProfile | null>(firebaseUserUrl(id));
+            this.users.set(id, profile);
+            return profile;
+        });
+    }
+
+    public cachedStoriesBy(id: string, page: number): ActivityPage<Story> | undefined {
+        return this.activity.get(`story:${id}:${page}`) as ActivityPage<Story> | undefined;
+    }
+
+    public cachedCommentsBy(id: string, page: number): ActivityPage<UserComment> | undefined {
+        return this.activity.get(`comment:${id}:${page}`) as ActivityPage<UserComment> | undefined;
+    }
+
+    public storiesBy(id: string, page: number): Promise<ActivityPage<Story>> {
+        return this.activityPage(id, 'story', page, storyFromHit);
+    }
+
+    public commentsBy(id: string, page: number): Promise<ActivityPage<UserComment>> {
+        return this.activityPage(id, 'comment', page, commentFromHit);
+    }
+
+    /** Starts loading a profile (e.g. on hover) so opening it can reuse the requests. */
+    public prefetchUser(id: string): void {
+        if (!this.users.has(id)) {
+            this.user(id).catch(() => undefined);
+            this.storiesBy(id, 0).catch(() => undefined);
+        }
+    }
+
+    private activityPage<T extends Story | UserComment>(
+        id: string,
+        kind: 'story' | 'comment',
+        page: number,
+        convert: (hit: AlgoliaSearchPage['hits'][number]) => T,
+    ): Promise<ActivityPage<T>> {
+        const key = `${kind}:${id}:${page}`;
+        return this.shared(key, async () => {
+            const result = await this.fetchJson<AlgoliaSearchPage>(algoliaActivityUrl(id, kind, page));
+            const activityPage: ActivityPage<T> = { page, items: result.hits.map(convert), hasMore: result.page + 1 < result.nbPages };
+            this.activity.set(key, activityPage as ActivityPage<Story> | ActivityPage<UserComment>);
+            return activityPage;
+        });
+    }
+
     public cachedThread(id: number): Thread | undefined {
         return this.threads.get(id) ?? this.inflight.get(id)?.latest.partial;
     }

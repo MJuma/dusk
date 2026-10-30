@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 
 import { refreshTick } from '../app/refresh';
+import { userHref } from '../app/router';
 import { settingsOpen } from '../app/settings';
 import { getVisit, markSeen, recordThreadLoad } from '../app/visits';
 import type { Visit } from '../app/visits';
@@ -47,6 +48,8 @@ function ago(epochMs: number): string {
 
 interface ThreadViewProps {
     id: number;
+    /** A comment to jump to once the thread has loaded (e.g. from a profile's comment list). */
+    focus?: number;
 }
 
 interface LoadedThread {
@@ -54,7 +57,7 @@ interface LoadedThread {
     previous: Visit | undefined;
 }
 
-export function ThreadView({ id }: ThreadViewProps) {
+export function ThreadView({ id, focus }: ThreadViewProps) {
     const tick = refreshTick.value;
     // A thread together with the visit it's compared against: "new" means new since that visit.
     const [loaded, setLoaded] = useState<LoadedThread>(() => ({ thread: source.cachedThread(id), previous: getVisit(id) }));
@@ -214,6 +217,15 @@ export function ThreadView({ id }: ThreadViewProps) {
         }
     }, [jumpTo, toggle]);
 
+    // Jump to the linked comment once its final position is known.
+    const focusedRef = useRef(false);
+    useEffect(() => {
+        if (focus !== undefined && !focusedRef.current && thread?.complete && index.position.has(focus)) {
+            focusedRef.current = true;
+            jumpTo(focus);
+        }
+    }, [focus, thread, index, jumpTo]);
+
     const nextNew = useCallback(() => {
         navigate('next-new');
     }, [navigate]);
@@ -328,7 +340,11 @@ export function ThreadView({ id }: ThreadViewProps) {
                 </h1>
                 <div class="story-meta">
                     {story.domain && <span class="story-domain">{story.domain}</span>}
-                    {story.score} pts · {story.by} · {timeAgo(story.time)} · {story.descendants} comments ·{' '}
+                    {story.score} pts ·{' '}
+                    <a class="story-by" href={userHref(story.by)}>
+                        {story.by}
+                    </a>
+                    {' '}· {timeAgo(story.time)} · {story.descendants} comments ·{' '}
                     <a href={hnItemUrl(story.id)} target="_blank" rel="noopener noreferrer">
                         Open on HN
                     </a>

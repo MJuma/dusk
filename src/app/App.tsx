@@ -2,6 +2,7 @@ import { useLayoutEffect } from 'preact/hooks';
 
 import { FeedView } from '../feed/FeedView';
 import { ThreadView } from '../thread/ThreadView';
+import { UserView } from '../user/UserView';
 import { refresh } from './refresh';
 import { FEEDS, feedHref, route, routeKey, savedScroll } from './router';
 import { settingsOpen } from './settings';
@@ -116,9 +117,9 @@ export function App() {
                     {SETTINGS_ICON}
                 </button>
             </header>
-            {current.name === 'item'
-                ? <ThreadView key={key} id={current.id} />
-                : <FeedView key={key} kind={current.kind} page={current.page} />}
+            {current.name === 'item' && <ThreadView key={key} id={current.id} focus={current.focus} />}
+            {current.name === 'user' && <UserView key={key} id={current.id} tab={current.tab} />}
+            {current.name === 'feed' && <FeedView key={key} kind={current.kind} page={current.page} />}
             <SettingsDialog />
             <ToastView />
         </>
