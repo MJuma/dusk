@@ -9,9 +9,25 @@ A fast, dark-first Hacker News reader. It's a static PWA hosted on GitHub Pages,
 - **Algolia** (`/api/v1/items/:id`) returns a whole thread in one request, but in chronological order.
 - **Firebase** (`/v0/item/:id`) returns `kids` in HN's ranked order. Dusk fetches it only for comments with two or more replies, and for replies Algolia lacks: comments too new to be indexed, and dead comments that HN keeps collapsed because they have live replies.
 
-`src/data/thread.logic.ts` merges the two sources. The fixture tests check the result against HN's own rendered page: order, depth, and which comments start collapsed or hidden.
+`src/data/thread.logic.ts` merges the two sources. The fixture tests check the result against HN's own rendered page: order, depth, which comments start collapsed or hidden, and every comment's root/parent/prev/next link.
 
 Voting, replying, submitting, flagging and favoriting open the matching HN page.
+
+## Reading
+
+- **Read stories**: titles of opened links and counts of read threads are dimmed. A "+N" badge shows new comments since your last visit.
+- **New comments**: comments posted since your last load are highlighted. They stay new until they've been on screen for a moment, so a refresh doesn't lose any you haven't seen yet. History is stored per device in `localStorage` (`dusk:visit:<id>`) and dropped after 30 days.
+- **Navigation**: every comment has HN's `root | parent | prev | next` links. The bottom bar jumps between top-level comments and new comments, and shows which thread you're in.
+- **Settings** (sliders icon or `?`): open comments in a new tab or the same tab (auto: new tab on a laptop, same view on a phone), content width, and reply indent.
+
+| Key | Action |
+| --- | --- |
+| `n` / `p` | Next / previous top-level comment |
+| `j` / `k` | Next / previous comment |
+| `N` / `P` | Next / previous new comment |
+| `u` / `r` | Parent / root |
+| `c` | Collapse / expand |
+| `?` | Settings and shortcuts |
 
 ## Commands
 

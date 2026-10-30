@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 
+import { refreshTick } from '../app/refresh';
 import { feedHref } from '../app/router';
 import { PAGE_SIZE, source } from '../data/source';
 import type { FeedPage } from '../data/source';
@@ -12,12 +13,15 @@ interface FeedViewProps {
 }
 
 export function FeedView({ kind, page }: FeedViewProps) {
+    const tick = refreshTick.value;
+    const mountTick = useRef(tick);
     const [feed, setFeed] = useState<FeedPage | undefined>(() => source.cachedFeed(kind, page));
     const [error, setError] = useState<string>();
 
     useEffect(() => {
         const controller = new AbortController();
-        source.feed(kind, page, controller.signal)
+        setError(undefined);
+        source.feed(kind, page, controller.signal, tick !== mountTick.current)
             .then(setFeed)
             .catch((reason: unknown) => {
                 if (!controller.signal.aborted) {
@@ -27,7 +31,7 @@ export function FeedView({ kind, page }: FeedViewProps) {
         return () => {
             controller.abort();
         };
-    }, [kind, page]);
+    }, [kind, page, tick]);
 
     if (!feed) {
         return <main class="status">{error ?? 'Loading…'}</main>;

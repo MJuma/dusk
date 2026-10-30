@@ -2,13 +2,18 @@
     color-scheme: dark;
     --bg: #101216;
     --surface: #171a1f;
+    --raised: #1d2128;
     --border: #23282f;
     --text: #d6d9de;
     --muted: #868d98;
     --title: #eceef1;
-    --visited: #8f96a0;
+    --read: #6c727b;
     --accent: #ff7a1a;
+    --on-accent: #101216;
     --link: #8cc4ff;
+    --link-visited: #b39ddb;
+    --new-bg: rgb(255 122 26 / 0.08);
+    --focus-bg: rgb(140 196 255 / 0.08);
     --rail-0: #ff8a3d;
     --rail-1: #4fb3d9;
     --rail-2: #a78bfa;
@@ -17,8 +22,10 @@
     --rail-5: #e5c07b;
     --rail-6: #5c9cf5;
     --rail-7: #4dd0b5;
-    --indent: 10px;
+    --indent: 14px;
     --rail: 2px;
+    /* Space between a comment's own rail and its text. */
+    --rail-gap: 10px;
     --gutter: 0.75rem;
     --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
     --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -29,13 +36,18 @@
         color-scheme: light;
         --bg: #f6f6ef;
         --surface: #ffffff;
+        --raised: #ffffff;
         --border: #e2e2d8;
         --text: #1f2328;
         --muted: #6a6f76;
         --title: #111111;
-        --visited: #6f6f6f;
+        --read: #8b8b8b;
         --accent: #e05a00;
+        --on-accent: #ffffff;
         --link: #0a58ca;
+        --link-visited: #6f42c1;
+        --new-bg: rgb(224 90 0 / 0.08);
+        --focus-bg: rgb(10 88 202 / 0.07);
         --rail-0: #e8710a;
         --rail-1: #1b8fbf;
         --rail-2: #7c5cd6;
@@ -47,10 +59,31 @@
     }
 }
 
+/* Reply indent per level. HN uses 40px on desktop and 12px on phones. */
+:root[data-indent='compact'] {
+    --indent: 10px;
+}
+
+:root[data-indent='wide'] {
+    --indent: 18px;
+}
+
 @media (min-width: 720px) {
     :root {
-        --indent: 14px;
         --gutter: 1rem;
+    }
+
+    :root,
+    :root[data-indent='normal'] {
+        --indent: 28px;
+    }
+
+    :root[data-indent='compact'] {
+        --indent: 16px;
+    }
+
+    :root[data-indent='wide'] {
+        --indent: 40px;
     }
 }
 
@@ -88,10 +121,40 @@ a {
     outline-offset: 2px;
 }
 
+button {
+    font: inherit;
+    color: inherit;
+}
+
+svg {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* Content width: full on phones; on laptops HN's 85% by default. */
 #app {
-    max-width: 52rem;
     margin: 0 auto;
     padding-bottom: env(safe-area-inset-bottom);
+}
+
+@media (min-width: 900px) {
+    :root[data-width='wide'] #app {
+        width: 85%;
+    }
+
+    :root[data-width='wide'] .c-body,
+    :root[data-width='wide'] .thread-text {
+        max-width: 1215px;
+    }
+
+    :root[data-width='narrow'] #app {
+        max-width: 52rem;
+    }
 }
 
 /* ── Top bar ─────────────────────────────────────────────── */
@@ -102,8 +165,8 @@ a {
     z-index: 10;
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    padding: calc(env(safe-area-inset-top) + 0.4rem) var(--gutter) 0.4rem;
+    gap: 0.5rem;
+    padding: calc(env(safe-area-inset-top) + 0.35rem) var(--gutter) 0.35rem;
     background: var(--bg);
     border-bottom: 1px solid var(--border);
 }
@@ -117,9 +180,18 @@ a {
 
 .tabs {
     display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
     gap: 0.15rem;
     overflow-x: auto;
     scrollbar-width: none;
+}
+
+/* On narrow screens the tabs scroll sideways; fade the edge so the clipping reads as intentional. */
+@media (max-width: 520px) {
+    .tabs {
+        mask-image: linear-gradient(to right, #000 calc(100% - 1.25rem), transparent);
+    }
 }
 
 .tab {
@@ -131,6 +203,25 @@ a {
 }
 
 .tab[aria-current='page'] {
+    background: var(--surface);
+    color: var(--title);
+}
+
+.icon-btn {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+}
+
+.icon-btn:hover {
     background: var(--surface);
     color: var(--title);
 }
@@ -165,8 +256,14 @@ a {
     text-decoration: none;
 }
 
+/* Opened stories: Dusk's own record, plus the browser's history for links visited elsewhere. */
+.story-read .story-title,
 .story-title:visited {
-    color: var(--visited);
+    color: var(--read);
+}
+
+.story-read .story-title {
+    font-weight: 400;
 }
 
 .story-domain {
@@ -190,17 +287,34 @@ a {
 }
 
 .story-comments {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     align-self: center;
     min-width: 2.8em;
     padding: 0.35em 0.5em;
     border: 1px solid var(--border);
     border-radius: 8px;
     background: var(--surface);
-    color: var(--text);
+    color: var(--title);
     font-size: 0.82em;
     font-variant-numeric: tabular-nums;
-    text-align: center;
+    line-height: 1.25;
     text-decoration: none;
+}
+
+.story-comments-read {
+    background: none;
+    color: var(--read);
+}
+
+.story-new {
+    margin-top: 0.2em;
+    padding: 0 0.35em;
+    border-radius: 4px;
+    background: var(--accent);
+    color: var(--on-accent);
+    font-weight: 700;
 }
 
 .more {
@@ -216,7 +330,22 @@ a {
     text-align: center;
 }
 
+.link-btn {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--accent);
+    font-weight: 600;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
 /* ── Thread ──────────────────────────────────────────────── */
+
+.thread {
+    /* Room to scroll the last comment above the navigation bar. */
+    padding-bottom: 5rem;
+}
 
 .thread-head {
     padding: 0.75rem var(--gutter);
@@ -235,19 +364,25 @@ a {
     text-decoration: none;
 }
 
+.thread-new {
+    margin: 0.4rem 0 0;
+    color: var(--muted);
+    font-size: 0.85em;
+}
+
 .thread-text {
     margin-top: 0.6rem;
     overflow-wrap: anywhere;
 }
 
 /*
- * Depth rails: one thin line per ancestor level, colored by level and cycling through 8 hues.
- * A single repeating gradient sized to (depth + 1) * indent draws all of a row's rails, so stacked
- * rows form continuous colored lines down the page.
+ * Depth rails: one thin line per level from the top-level comment down to this one, colored by
+ * level and cycling through 8 hues. A single repeating gradient draws them all, so stacked rows
+ * form continuous colored lines down the page.
  */
 .c {
     --x: calc(var(--d) * var(--indent));
-    padding: 0.35rem var(--gutter) 0.35rem calc(var(--gutter) + var(--x) + var(--indent));
+    padding: 0.35rem var(--gutter) 0.35rem calc(var(--gutter) + var(--x) + var(--rail-gap));
     background-image: repeating-linear-gradient(
         to right,
         var(--rail-0) 0 var(--rail),
@@ -268,10 +403,8 @@ a {
         transparent calc(7 * var(--indent) + var(--rail)) calc(8 * var(--indent))
     );
     background-position: var(--gutter) 0;
-    background-size: calc(var(--x) + var(--indent)) 100%;
+    background-size: calc(var(--x) + var(--rail)) 100%;
     background-repeat: no-repeat;
-    content-visibility: auto;
-    contain-intrinsic-size: auto 6em;
 }
 
 .c-top {
@@ -280,11 +413,26 @@ a {
     padding-top: 0.6rem;
 }
 
+.c-new {
+    background-color: var(--new-bg);
+}
+
+.c-focus {
+    background-color: var(--focus-bg);
+    animation: c-land 0.9s ease-out;
+}
+
+@keyframes c-land {
+    from {
+        background-color: rgb(140 196 255 / 0.28);
+    }
+}
+
 .c-head {
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
-    gap: 0 0.5rem;
+    gap: 0 0.55rem;
     color: var(--muted);
     font-size: 0.8em;
 }
@@ -294,7 +442,6 @@ a {
     border: 0;
     background: none;
     color: var(--muted);
-    font: inherit;
     font-family: var(--mono);
     cursor: pointer;
 }
@@ -308,9 +455,26 @@ a {
     color: var(--accent);
 }
 
+.c-new-badge {
+    padding: 0 0.35em;
+    border-radius: 4px;
+    background: var(--accent);
+    color: var(--on-accent);
+    font-weight: 700;
+}
+
 .c-action {
+    padding: 0;
+    border: 0;
+    background: none;
     color: var(--muted);
     text-decoration: none;
+    cursor: pointer;
+}
+
+.c-action:hover {
+    color: var(--title);
+    text-decoration: underline;
 }
 
 .c-collapsed {
@@ -320,6 +484,10 @@ a {
 .c-body {
     margin-top: 0.1rem;
     overflow-wrap: anywhere;
+}
+
+.c-body a:visited {
+    color: var(--link-visited);
 }
 
 .c-body p,
@@ -336,4 +504,146 @@ a {
     background: var(--surface);
     font: 0.85em/1.4 var(--mono);
     white-space: pre;
+}
+
+/* ── Thread navigation bar ───────────────────────────────── */
+
+.thread-nav {
+    position: fixed;
+    bottom: calc(0.75rem + env(safe-area-inset-bottom));
+    left: 50%;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    transform: translateX(-50%);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--raised);
+    box-shadow: 0 6px 24px rgb(0 0 0 / 0.35);
+}
+
+.nav-btn {
+    display: grid;
+    place-items: center;
+    min-width: 44px;
+    height: 40px;
+    padding: 0 0.75rem;
+    border: 0;
+    border-radius: 999px;
+    background: none;
+    color: var(--title);
+    cursor: pointer;
+}
+
+.nav-btn:hover {
+    background: var(--surface);
+}
+
+.nav-pos {
+    min-width: 4.5em;
+    color: var(--muted);
+    font-size: 0.85em;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.nav-new {
+    background: var(--accent);
+    color: var(--on-accent);
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.nav-new:hover {
+    background: var(--accent);
+    filter: brightness(1.1);
+}
+
+/* ── Settings ────────────────────────────────────────────── */
+
+.settings {
+    width: min(30rem, calc(100vw - 2rem));
+    max-height: calc(100dvh - 2rem);
+    padding: 1rem 1.25rem;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--raised);
+    color: var(--text);
+}
+
+.settings::backdrop {
+    background: rgb(0 0 0 / 0.5);
+}
+
+.settings h2 {
+    margin: 0 0 0.75rem;
+    font-size: 1.1em;
+}
+
+.settings h3 {
+    margin: 1rem 0 0.4rem;
+    font-size: 0.9em;
+    color: var(--muted);
+}
+
+.choice {
+    margin: 0 0 0.75rem;
+    padding: 0;
+    border: 0;
+}
+
+.choice legend {
+    margin-bottom: 0.3rem;
+    padding: 0;
+    color: var(--muted);
+    font-size: 0.9em;
+}
+
+.choice-option {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.2rem 0;
+    cursor: pointer;
+}
+
+.choice-option input {
+    accent-color: var(--accent);
+}
+
+.shortcuts {
+    display: grid;
+    gap: 0.2rem;
+    margin: 0;
+    font-size: 0.9em;
+}
+
+.shortcuts div {
+    display: grid;
+    grid-template-columns: 4.5rem 1fr;
+}
+
+.shortcuts dt {
+    font-family: var(--mono);
+    color: var(--title);
+}
+
+.shortcuts dd {
+    margin: 0;
+}
+
+.settings-done {
+    display: block;
+    margin: 1rem 0 0 auto;
+    padding: 0.45rem 1.1rem;
+    border: 0;
+    border-radius: 8px;
+    background: var(--accent);
+    color: var(--on-accent);
+    font-weight: 600;
+    cursor: pointer;
 }

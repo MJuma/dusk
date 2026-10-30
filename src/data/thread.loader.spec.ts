@@ -1,67 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { visibleRows } from '../thread/ThreadView.logic';
+import { fakeApi, fixtures, KNOWN_GAPS, withoutSubtrees } from './testing';
+import type { Fixture } from './testing';
 import { FIRST_SCREEN_ROWS } from './thread.logic';
 import { loadThread } from './thread.loader';
-import type { FetchJson } from './thread.loader';
-import type { AlgoliaItem, FirebaseItem, Thread } from './types';
-import large from './fixtures/large.json';
-import medium from './fixtures/medium.json';
-import small from './fixtures/small.json';
-
-type RowState = 'open' | 'collapsed' | 'hidden';
-
-interface Fixture {
-    storyId: number;
-    expected: [number, number, RowState][];
-    algolia: AlgoliaItem;
-    firebase: Record<string, FirebaseItem>;
-}
-
-const fixtures = { large, medium, small } as unknown as Record<string, Fixture>;
-
-/**
- * Dead comments that Algolia omits and whose parent has no other replies, so Dusk never asks
- * Firebase about them. HN shows them collapsed; Dusk reports their live replies as unavailable.
- */
-const KNOWN_GAPS: Record<string, number[]> = { large: [50244326] };
-
-function withoutSubtrees(expected: Fixture['expected'], roots: readonly number[]): Fixture['expected'] {
-    const kept: Fixture['expected'] = [];
-    let skipBelow = Number.POSITIVE_INFINITY;
-    for (const row of expected) {
-        const [id, depth] = row;
-        if (depth <= skipBelow) {
-            skipBelow = roots.includes(id) ? depth : Number.POSITIVE_INFINITY;
-        }
-        if (skipBelow === Number.POSITIVE_INFINITY) {
-            kept.push(row);
-        }
-    }
-    return kept;
-}
-
-interface FakeApi {
-    fetchJson: FetchJson;
-    firebaseRequests: number[];
-}
-
-function fakeApi(fixture: Fixture, algolia: AlgoliaItem | null = fixture.algolia): FakeApi {
-    const firebaseRequests: number[] = [];
-    const fetchJson = (async (url: string) => {
-        const firebase = /\/item\/(\d+)\.json$/.exec(url);
-        if (firebase) {
-            const id = Number(firebase[1]);
-            firebaseRequests.push(id);
-            return fixture.firebase[id] ?? null;
-        }
-        if (url.includes('hn.algolia.com') && algolia) {
-            return structuredClone(algolia);
-        }
-        throw new Error(`404 ${url}`);
-    }) as FetchJson;
-    return { fetchJson, firebaseRequests };
-}
+import type { AlgoliaItem, Thread } from './types';
 
 function rows(thread: Thread): [number, number][] {
     return thread.comments.map((comment) => [comment.id, comment.depth]);

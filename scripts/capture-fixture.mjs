@@ -1,5 +1,5 @@
 // Captures a Hacker News thread from all three sources into a test fixture:
-//   - expected: HN's own rendered order ([id, depth, state] rows, all comment pages)
+//   - expected: HN's own rendered order ([id, depth, state, {root, parent, prev, next}] rows)
 //   - algolia:  the Algolia item tree (text reduced to a presence marker to keep fixtures small)
 //   - firebase: every Firebase item reachable from the story via `kids`
 //
@@ -34,11 +34,14 @@ async function getJson(url) {
 }
 
 // Row states as HN renders them for logged-out readers: heavily flagged comments start collapsed
-// ("coll") and their replies are present but hidden ("noshow") until expanded.
+// ("coll") and their replies are present but hidden ("noshow") until expanded. Each row also keeps
+// the targets of its "root | parent | prev | next" links.
 function parseHnRows(html) {
     const rows = [];
-    for (const match of html.matchAll(/<tr class=["']athing comtr([^"']*)["'] id=["'](\d+)["']/g)) {
-        const depth = Number(/indent=["'](\d+)["']/.exec(html.slice(match.index, match.index + 3000))?.[1]);
+    const matches = [...html.matchAll(/<tr class=["']athing comtr([^"']*)["'] id=["'](\d+)["']/g)];
+    matches.forEach((match, index) => {
+        const chunk = html.slice(match.index, matches[index + 1]?.index ?? html.length);
+        const depth = Number(/indent=["'](\d+)["']/.exec(chunk)?.[1]);
         const classes = match[1].trim().split(/\s+/);
         let state = 'open';
         if (classes.includes('coll')) {
@@ -46,8 +49,13 @@ function parseHnRows(html) {
         } else if (classes.includes('noshow')) {
             state = 'hidden';
         }
-        rows.push([Number(match[2]), depth, state]);
-    }
+        const navs = /<span class=["']navs["']>([\s\S]*?)<\/span>/.exec(chunk)?.[1] ?? '';
+        const links = {};
+        for (const link of navs.matchAll(/href=["']#(\d+)["'][^>]*>(root|parent|prev|next)</g)) {
+            links[link[2]] = Number(link[1]);
+        }
+        rows.push([Number(match[2]), depth, state, links]);
+    });
     const moreTag = /<a\b[^>]*\bclass=["']morelink["'][^>]*>/.exec(html)?.[0];
     const moreHref = moreTag ? /href=["']([^"']+)["']/.exec(moreTag)?.[1] : undefined;
     return { rows, next: moreHref ? `${HN}/${moreHref.replaceAll('&amp;', '&')}` : null };

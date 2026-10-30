@@ -1,7 +1,7 @@
 import { feedUrl, firebaseItemUrl, toStory } from './hn';
 import { mapLimit } from './limit';
 import { loadThread } from './thread.loader';
-import type { FetchJson, LoadThreadOptions } from './thread.loader';
+import type { FetchJson } from './thread.loader';
 import type { FeedKind, FirebaseItem, Story, Thread } from './types';
 
 export const PAGE_SIZE = 30;
@@ -23,11 +23,17 @@ export const fetchJson: FetchJson = async <T>(url: string, signal?: AbortSignal)
     return response.json() as Promise<T>;
 };
 
+interface PendingThread {
+    promise: Promise<Thread>;
+    listeners: Set<(thread: Thread) => void>;
+    latest: { partial?: Thread };
+}
+
 /** Read access to HN. Everything the UI needs goes through here so the transport can change later. */
 export class HnSource {
     private readonly feeds = new Map<string, { at: number; page: FeedPage }>();
     private readonly threads = new Map<number, Thread>();
-    private readonly inflight = new Map<number, Promise<Thread>>();
+    private readonly inflight = new Map<number, PendingThread>();
 
     public constructor(private readonly fetchJson: FetchJson) {}
 
@@ -35,10 +41,11 @@ export class HnSource {
         return this.feeds.get(`${kind}:${page}`)?.page;
     }
 
-    public async feed(kind: FeedKind, page: number, signal?: AbortSignal): Promise<FeedPage> {
+    /** A feed page, reused for a minute unless `force` is set. */
+    public async feed(kind: FeedKind, page: number, signal?: AbortSignal, force = false): Promise<FeedPage> {
         const key = `${kind}:${page}`;
         const cached = this.feeds.get(key);
-        if (cached && Date.now() - cached.at < FEED_FRESH_MS) {
+        if (!force && cached && Date.now() - cached.at < FEED_FRESH_MS) {
             return cached.page;
         }
         const ids = await this.fetchJson<number[]>(feedUrl(kind), signal);
@@ -63,12 +70,34 @@ export class HnSource {
         }
     }
 
-    public thread(id: number, options: Omit<LoadThreadOptions, 'concurrency'> = {}): Promise<Thread> {
-        const pending = this.inflight.get(id);
-        if (pending) {
-            return pending;
+    /**
+     * Loads the latest version of a thread, joining a load already in flight. Loads always run to
+     * completion (and fill the cache) even if the caller goes away, so quickly leaving and returning,
+     * or refreshing mid-load, reuses the work instead of failing on a cancelled request.
+     */
+    public thread(id: number, onPartial?: (thread: Thread) => void): Promise<Thread> {
+        const pending = this.inflight.get(id) ?? this.startThread(id);
+        if (onPartial) {
+            if (pending.latest.partial) {
+                onPartial(pending.latest.partial);
+            }
+            pending.listeners.add(onPartial);
         }
-        const request = loadThread(id, this.fetchJson, { ...options, concurrency: CONCURRENCY })
+        return pending.promise;
+    }
+
+    private startThread(id: number): PendingThread {
+        const listeners = new Set<(thread: Thread) => void>();
+        const latest: PendingThread['latest'] = {};
+        const promise = loadThread(id, this.fetchJson, {
+            concurrency: CONCURRENCY,
+            onPartial: (partial) => {
+                latest.partial = partial;
+                for (const listener of listeners) {
+                    listener(partial);
+                }
+            },
+        })
             .then((thread) => {
                 this.threads.set(id, thread);
                 return thread;
@@ -76,8 +105,9 @@ export class HnSource {
             .finally(() => {
                 this.inflight.delete(id);
             });
-        this.inflight.set(id, request);
-        return request;
+        const entry: PendingThread = { promise, listeners, latest };
+        this.inflight.set(id, entry);
+        return entry;
     }
 }
 
