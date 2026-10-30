@@ -1,3 +1,7 @@
+/* ── Themes ──────────────────────────────────────────────
+ * Dusk is the default palette; data-theme on <html> (set from Settings) swaps it. Keep each
+ * theme's --bg in sync with THEME_BACKGROUNDS in src/app/settings.ts.
+ */
 :root {
     color-scheme: dark;
     --bg: #101216;
@@ -12,8 +16,11 @@
     --on-accent: #101216;
     --link: #8cc4ff;
     --link-visited: #b39ddb;
-    --new-bg: rgb(255 122 26 / 0.08);
-    --focus-bg: rgb(140 196 255 / 0.08);
+    --focus-tint: rgb(140 196 255 / 0.12);
+    --shadow: rgb(0 0 0 / 0.35);
+    /* Comment cards take their level's rail color at these strengths, alternating between siblings. */
+    --tint-a: 4%;
+    --tint-b: 7%;
     --rail-0: #ff8a3d;
     --rail-1: #4fb3d9;
     --rail-2: #a78bfa;
@@ -27,36 +34,87 @@
     /* Space between a comment's own rail and its text. */
     --rail-gap: 10px;
     --gutter: 0.75rem;
+    --thumb-w: 48px;
+    --thumb-h: 48px;
     --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
     --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-@media (prefers-color-scheme: light) {
-    :root {
-        color-scheme: light;
-        --bg: #f6f6ef;
-        --surface: #ffffff;
-        --raised: #ffffff;
-        --border: #e2e2d8;
-        --text: #1f2328;
-        --muted: #6a6f76;
-        --title: #111111;
-        --read: #8b8b8b;
-        --accent: #e05a00;
-        --on-accent: #ffffff;
-        --link: #0a58ca;
-        --link-visited: #6f42c1;
-        --new-bg: rgb(224 90 0 / 0.08);
-        --focus-bg: rgb(10 88 202 / 0.07);
-        --rail-0: #e8710a;
-        --rail-1: #1b8fbf;
-        --rail-2: #7c5cd6;
-        --rail-3: #3f9a45;
-        --rail-4: #d23f74;
-        --rail-5: #b8901f;
-        --rail-6: #2f6fd6;
-        --rail-7: #1f9e86;
-    }
+/* Warm grays from Dark Reader's rendering of HN. */
+:root[data-theme='dark-reader'] {
+    --bg: #181a1b;
+    --surface: #202324;
+    --raised: #26292b;
+    --border: #35393b;
+    --text: #dcd8d3;
+    --muted: #999083;
+    --title: #e8e6e3;
+    --read: #7c766c;
+    --accent: #cc5200;
+    --on-accent: #181a1b;
+    --link: #3391ff;
+    --link-visited: #b48eff;
+    --focus-tint: rgb(51 145 255 / 0.12);
+}
+
+/* Softer, lower-contrast slate (like GitHub's dark dimmed). */
+:root[data-theme='dim'] {
+    --bg: #22272e;
+    --surface: #2d333b;
+    --raised: #2d333b;
+    --border: #373e47;
+    --text: #adbac7;
+    --muted: #768390;
+    --title: #cdd9e5;
+    --read: #636e7b;
+    --accent: #f0883e;
+    --on-accent: #22272e;
+    --link: #539bf5;
+    --link-visited: #b083f0;
+    --focus-tint: rgb(83 155 245 / 0.14);
+    --shadow: rgb(0 0 0 / 0.4);
+}
+
+/* True black for OLED screens. */
+:root[data-theme='black'] {
+    --bg: #000000;
+    --surface: #0f1012;
+    --raised: #17191c;
+    --border: #1d2024;
+    --text: #d0d3d8;
+    --muted: #7d838d;
+    --title: #eceef1;
+    --read: #5f656d;
+    --tint-a: 5%;
+    --tint-b: 9%;
+}
+
+:root[data-theme='light'] {
+    color-scheme: light;
+    --bg: #f6f6ef;
+    --surface: #ffffff;
+    --raised: #ffffff;
+    --border: #e2e2d8;
+    --text: #1f2328;
+    --muted: #6a6f76;
+    --title: #111111;
+    --read: #8b8b8b;
+    --accent: #e05a00;
+    --on-accent: #ffffff;
+    --link: #0a58ca;
+    --link-visited: #6f42c1;
+    --focus-tint: rgb(10 88 202 / 0.1);
+    --shadow: rgb(0 0 0 / 0.12);
+    --tint-a: 5%;
+    --tint-b: 9%;
+    --rail-0: #e8710a;
+    --rail-1: #1b8fbf;
+    --rail-2: #7c5cd6;
+    --rail-3: #3f9a45;
+    --rail-4: #d23f74;
+    --rail-5: #b8901f;
+    --rail-6: #2f6fd6;
+    --rail-7: #1f9e86;
 }
 
 /* Reply indent per level. HN uses 40px on desktop and 12px on phones. */
@@ -71,6 +129,7 @@
 @media (min-width: 720px) {
     :root {
         --gutter: 1rem;
+        --thumb-w: 64px;
     }
 
     :root,
@@ -235,6 +294,39 @@ svg {
     gap: 0 0.6rem;
     padding: 0.55rem var(--gutter);
     border-bottom: 1px solid var(--border);
+}
+
+.story-thumbs {
+    grid-template-columns: 1.8em var(--thumb-w) 1fr auto;
+}
+
+.thumb {
+    display: grid;
+    place-items: center;
+    width: var(--thumb-w);
+    height: var(--thumb-h);
+    margin-top: 0.15em;
+    overflow: hidden;
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--muted);
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.thumb-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.thumb-icon {
+    width: 20px;
+    height: 20px;
+}
+
+.story-read .thumb {
+    opacity: 0.55;
 }
 
 .story-rank {
@@ -406,6 +498,8 @@ svg {
  */
 .c {
     --x: calc(var(--d) * var(--indent));
+    --tone: var(--rail-0);
+    --tint: color-mix(in srgb, var(--tone) var(--tint-a), transparent);
     padding: 0.35rem var(--gutter) 0.35rem calc(var(--gutter) + var(--x) + var(--rail-gap));
     background-image: repeating-linear-gradient(
         to right,
@@ -425,10 +519,44 @@ svg {
         transparent calc(6 * var(--indent) + var(--rail)) calc(7 * var(--indent)),
         var(--rail-7) calc(7 * var(--indent)) calc(7 * var(--indent) + var(--rail)),
         transparent calc(7 * var(--indent) + var(--rail)) calc(8 * var(--indent))
-    );
-    background-position: var(--gutter) 0;
-    background-size: calc(var(--x) + var(--rail)) 100%;
+    ),
+    linear-gradient(var(--tint), var(--tint));
+    background-position: var(--gutter) 0, calc(var(--gutter) + var(--x)) 0;
+    background-size: calc(var(--x) + var(--rail)) 100%, 100% 100%;
     background-repeat: no-repeat;
+}
+
+/* Each comment is a faint card from its own rail rightwards, tinted with its level's color. */
+.c[data-alt] {
+    --tint: color-mix(in srgb, var(--tone) var(--tint-b), transparent);
+}
+
+.c[data-hue='1'] {
+    --tone: var(--rail-1);
+}
+
+.c[data-hue='2'] {
+    --tone: var(--rail-2);
+}
+
+.c[data-hue='3'] {
+    --tone: var(--rail-3);
+}
+
+.c[data-hue='4'] {
+    --tone: var(--rail-4);
+}
+
+.c[data-hue='5'] {
+    --tone: var(--rail-5);
+}
+
+.c[data-hue='6'] {
+    --tone: var(--rail-6);
+}
+
+.c[data-hue='7'] {
+    --tone: var(--rail-7);
 }
 
 .c-top {
@@ -437,18 +565,19 @@ svg {
     padding-top: 0.6rem;
 }
 
+/* New comments get an accent bar at the row's left edge (the cards already use the background). */
 .c-new {
-    background-color: var(--new-bg);
+    box-shadow: inset 3px 0 0 var(--accent);
 }
 
-.c-focus {
-    background-color: var(--focus-bg);
+.c.c-focus {
+    --tint: var(--focus-tint);
     animation: c-land 0.9s ease-out;
 }
 
 @keyframes c-land {
     from {
-        background-color: rgb(140 196 255 / 0.28);
+        box-shadow: inset 0 0 0 100vmax rgb(140 196 255 / 0.2);
     }
 }
 
@@ -545,7 +674,7 @@ svg {
     border: 1px solid var(--border);
     border-radius: 999px;
     background: var(--raised);
-    box-shadow: 0 6px 24px rgb(0 0 0 / 0.35);
+    box-shadow: 0 6px 24px var(--shadow);
 }
 
 .nav-btn {
@@ -655,6 +784,52 @@ svg {
     accent-color: var(--accent);
 }
 
+.swatch {
+    display: inline-grid;
+    place-items: center;
+    width: 2.2em;
+    height: 1.4em;
+    border-radius: 4px;
+    box-shadow: inset 0 0 0 1px rgb(128 128 128 / 0.35);
+    font-size: 0.75em;
+    font-weight: 700;
+}
+
+.swatch[data-swatch='system'] {
+    background: linear-gradient(135deg, #101216 50%, #f6f6ef 50%);
+    color: #ff7a1a;
+}
+
+.swatch[data-swatch='dusk'] {
+    background: #101216;
+    color: #eceef1;
+    box-shadow: inset 0 -3px 0 #ff7a1a;
+}
+
+.swatch[data-swatch='dark-reader'] {
+    background: #181a1b;
+    color: #e8e6e3;
+    box-shadow: inset 0 -3px 0 #cc5200;
+}
+
+.swatch[data-swatch='dim'] {
+    background: #22272e;
+    color: #cdd9e5;
+    box-shadow: inset 0 -3px 0 #f0883e;
+}
+
+.swatch[data-swatch='black'] {
+    background: #000000;
+    color: #eceef1;
+    box-shadow: inset 0 -3px 0 #ff7a1a;
+}
+
+.swatch[data-swatch='light'] {
+    background: #f6f6ef;
+    color: #111111;
+    box-shadow: inset 0 -3px 0 #e05a00;
+}
+
 .shortcuts {
     display: grid;
     gap: 0.2rem;
@@ -705,7 +880,7 @@ svg {
     border: 1px solid var(--border);
     border-radius: 10px;
     background: var(--raised);
-    box-shadow: 0 6px 24px rgb(0 0 0 / 0.35);
+    box-shadow: 0 6px 24px var(--shadow);
     font-size: 0.9em;
 }
 

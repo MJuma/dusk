@@ -13,6 +13,7 @@ function comment(id: number, placeholder = false): ThreadComment {
         time: 0,
         collapsedByDefault: false,
         placeholder,
+        siblingIndex: 0,
         topLevelIndex: 0,
         childCount: 0,
         descendantCount: 0,

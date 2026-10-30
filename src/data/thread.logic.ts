@@ -174,7 +174,7 @@ export function assembleThread(tree: AlgoliaItem, items: ReadonlyMap<number, Fir
     }
 
     const comments: ThreadComment[] = [];
-    const flatten = (node: Node, depth: number, topLevelIndex: number): void => {
+    const flatten = (node: Node, depth: number, topLevelIndex: number, siblingIndex: number): void => {
         const index = comments.length;
         comments.push({
             id: node.id,
@@ -186,16 +186,17 @@ export function assembleThread(tree: AlgoliaItem, items: ReadonlyMap<number, Fir
             collapsedByDefault: node.collapsed,
             placeholder: node.placeholder,
             topLevelIndex,
+            siblingIndex,
             childCount: node.children.length,
             descendantCount: 0,
         });
-        for (const child of node.children) {
-            flatten(child, depth + 1, topLevelIndex);
-        }
+        node.children.forEach((child, childIndex) => {
+            flatten(child, depth + 1, topLevelIndex, childIndex);
+        });
         (comments[index] as ThreadComment).descendantCount = comments.length - index - 1;
     };
     root.children.forEach((node, topLevelIndex) => {
-        flatten(node, 0, topLevelIndex);
+        flatten(node, 0, topLevelIndex, topLevelIndex);
     });
     return comments;
 }

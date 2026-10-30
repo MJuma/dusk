@@ -32,6 +32,14 @@ describe('loadThread', () => {
             .toEqual(expected.filter(([, , state]) => state !== 'hidden').map(([id]) => id));
         // Live replies under the unreachable dead comments (the dead roots themselves aren't counted by HN).
         expect(thread.unavailable).toBe(fixture.expected.length - expected.length - gaps.length);
+        // Each comment knows its position among its parent's replies (drives the alternating card shade).
+        const lastSibling = new Map<number, number>();
+        const expectedSiblingIndex = thread.comments.map((comment) => {
+            const index = (lastSibling.get(comment.parentId) ?? -1) + 1;
+            lastSibling.set(comment.parentId, index);
+            return index;
+        });
+        expect(thread.comments.map((comment) => comment.siblingIndex)).toEqual(expectedSiblingIndex);
         // Only the story, multi-reply parents and replies missing from Algolia are fetched, not every comment.
         expect(api.firebaseRequests.length).toBeLessThan(fixture.expected.length / 2);
     });

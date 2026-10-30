@@ -1,12 +1,28 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'preact/hooks';
 
 import { settings, settingsOpen, updateSettings } from './settings';
-import type { CommentsTarget, ContentWidth, IndentSize } from './settings';
+import type { CommentsTarget, ContentWidth, IndentSize, Theme, Thumbnails } from './settings';
 
 interface Option {
     value: string;
     label: string;
+    /** Shows a preview chip in this theme's colors. */
+    swatch?: boolean;
 }
+
+const THEME_OPTIONS: readonly Option[] = [
+    { value: 'system', label: 'System (Dusk or Light)', swatch: true },
+    { value: 'dusk', label: 'Dusk', swatch: true },
+    { value: 'dark-reader', label: 'Dark Reader', swatch: true },
+    { value: 'dim', label: 'Dim', swatch: true },
+    { value: 'black', label: 'Black (OLED)', swatch: true },
+    { value: 'light', label: 'Light', swatch: true },
+];
+const THUMBNAIL_OPTIONS: readonly Option[] = [
+    { value: 'images', label: 'Article images (site icon when there is none)' },
+    { value: 'icons', label: 'Site icons only' },
+    { value: 'off', label: 'Off' },
+];
 
 const COMMENTS_OPTIONS: readonly Option[] = [
     { value: 'auto', label: 'Auto: new tab on a laptop, same view on a phone' },
@@ -39,6 +55,12 @@ const CLOSE_ICON = (
     </svg>
 );
 
+const setTheme = (value: string): void => {
+    updateSettings({ theme: value as Theme });
+};
+const setThumbnails = (value: string): void => {
+    updateSettings({ thumbnails: value as Thumbnails });
+};
 const setCommentsTarget = (value: string): void => {
     updateSettings({ commentsTarget: value as CommentsTarget });
 };
@@ -70,6 +92,7 @@ function Choice({ legend, name, value, options, onChange }: ChoiceProps) {
             {options.map((option) => (
                 <label key={option.value} class="choice-option">
                     <input type="radio" name={name} value={option.value} checked={option.value === value} onChange={handle} />
+                    {option.swatch && <span class="swatch" data-swatch={option.value} aria-hidden="true">Aa</span>}
                     {option.label}
                 </label>
             ))}
@@ -126,6 +149,8 @@ export function SettingsDialog() {
                         {CLOSE_ICON}
                     </button>
                 </header>
+                <Choice legend="Theme" name="theme" value={current.theme} options={THEME_OPTIONS} onChange={setTheme} />
+                <Choice legend="Thumbnails" name="thumbnails" value={current.thumbnails} options={THUMBNAIL_OPTIONS} onChange={setThumbnails} />
                 <Choice legend="Open comments in" name="comments-target" value={current.commentsTarget} options={COMMENTS_OPTIONS} onChange={setCommentsTarget} />
                 <Choice legend="Content width (laptop)" name="width" value={current.width} options={WIDTH_OPTIONS} onChange={setWidth} />
                 <Choice legend="Reply indent" name="indent" value={current.indent} options={INDENT_OPTIONS} onChange={setIndent} />

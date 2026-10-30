@@ -37,6 +37,15 @@ export function hnUserUrl(user: string): string {
     return `${HN}/user?id=${encodeURIComponent(user)}`;
 }
 
+/** The page's own preview (og:image) via 11ty's image service; an empty response when it has none. */
+export function previewImageUrl(url: string): string {
+    return `https://v1.opengraph.11ty.dev/${encodeURIComponent(url)}/small/webp/onerror/`;
+}
+
+export function siteIconUrl(domain: string): string {
+    return `https://icons.duckduckgo.com/ip3/${encodeURIComponent(domain)}.ico`;
+}
+
 export function domainOf(url: string | undefined): string | null {
     if (!url) {
         return null;

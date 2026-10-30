@@ -17,6 +17,7 @@ function comment(id: number, parentId: number, depth: number, descendantCount: n
         time: 0,
         collapsedByDefault,
         placeholder: false,
+        siblingIndex: 0,
         topLevelIndex: id < 5 ? 0 : 1,
         childCount: 0,
         descendantCount,

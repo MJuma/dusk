@@ -9,6 +9,7 @@ import { source } from '../data/source';
 import type { Story } from '../data/types';
 import { timeAgo } from '../lib/time';
 import { newCommentEstimate } from '../thread/newComments';
+import { Thumbnail } from './Thumbnail';
 
 interface StoryRowProps {
     story: Story;
@@ -17,6 +18,7 @@ interface StoryRowProps {
 
 export const StoryRow = memo(function StoryRow({ story, rank }: StoryRowProps) {
     const visit = visits.value.get(story.id);
+    const { thumbnails } = settings.value;
     const newTab = commentsInNewTab(settings.value);
     const external = story.url !== null;
     const commentsRead = visit?.commentsAt !== undefined;
@@ -60,9 +62,26 @@ export const StoryRow = memo(function StoryRow({ story, rank }: StoryRowProps) {
     if (fresh > 0) {
         commentsLabel += `, ${fresh} new`;
     }
+    let classes = 'story';
+    if (thumbnails !== 'off') {
+        classes += ' story-thumbs';
+    }
+    if (read) {
+        classes += ' story-read';
+    }
     return (
-        <li class={read ? 'story story-read' : 'story'}>
+        <li class={classes}>
             <span class="story-rank">{rank}</span>
+            {thumbnails !== 'off' && (
+                <Thumbnail
+                    key={thumbnails}
+                    story={story}
+                    mode={thumbnails}
+                    href={story.url ?? itemHref(story.id)}
+                    target={external ? '_blank' : commentsTarget}
+                    onOpen={external ? openLink : undefined}
+                />
+            )}
             <div class="story-main">
                 <a
                     class="story-title"

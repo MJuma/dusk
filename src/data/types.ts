@@ -60,6 +60,8 @@ export interface ThreadComment {
     placeholder: boolean;
     /** Index of this comment's top-level ancestor among the visible top-level comments. */
     topLevelIndex: number;
+    /** Position among its parent's replies. */
+    siblingIndex: number;
     childCount: number;
     descendantCount: number;
 }

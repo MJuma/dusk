@@ -6,7 +6,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 const CONTENT_SECURITY_POLICY = [
     "default-src 'self'",
     "connect-src 'self' https://hacker-news.firebaseio.com https://hn.algolia.com https://r.jina.ai",
-    "img-src 'self' data:",
+    "img-src 'self' data: https://v1.opengraph.11ty.dev https://icons.duckduckgo.com",
     "style-src 'self'",
     "script-src 'self'",
     "base-uri 'self'",

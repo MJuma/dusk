@@ -55,7 +55,13 @@ export const CommentRow = memo(function CommentRow({ comment, storyId, isOp, col
         classes += ' c-focus';
     }
     return (
-        <article class={classes} id={`c${comment.id}`} style={style}>
+        <article
+            class={classes}
+            id={`c${comment.id}`}
+            style={style}
+            data-hue={comment.depth % 8}
+            data-alt={comment.siblingIndex % 2 === 1 ? '' : undefined}
+        >
             <header class="c-head">
                 <button class="c-toggle" type="button" aria-expanded={!collapsed} onClick={toggle}>
                     {toggleLabel(comment, collapsed, newInside)}

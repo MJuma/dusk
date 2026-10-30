@@ -16,10 +16,13 @@ Voting, replying, submitting, flagging and favoriting open the matching HN page.
 ## Reading
 
 - **Story list**: "More" appends the next 30 stories in place, and returning from a thread restores the list and your scroll position. Opened links and read threads are dimmed. A "+N" badge shows new comments since your last visit.
+- **Thumbnails**: like old.reddit, each story shows the article's preview image (its `og:image`, resized by [11ty's OpenGraph image service](https://www.11ty.dev/docs/services/opengraph/)), or the site's icon (DuckDuckGo's icon service) when it has none. They load lazily after the list. These third-party services see the story URLs being previewed; turn thumbnails off or limit them to site icons in Settings.
 - **discuss / link + discuss** (laptop only): "link + discuss" opens the story and its comments in new tabs. Browsers allow one new tab per click unless pop-ups are allowed for the site, so if the second tab is blocked, Dusk offers it in a notice. Allowing pop-ups for the site once makes both open together.
 - **New comments**: comments posted since your last load are highlighted. They stay new until they've been on screen for a moment, so a refresh doesn't lose any you haven't seen yet. History is stored per device in `localStorage` (`dusk:visit:<id>`) and dropped after 30 days.
 - **Navigation**: every comment has HN's `root | parent | prev | next` links. The bottom bar jumps between top-level comments and new comments, and shows which thread you're in.
-- **Settings** (sliders icon or `?`): open comments in a new tab or the same tab (auto: new tab on a laptop, same view on a phone), content width, and reply indent.
+- **Comment cards**: each comment sits on a faint card tinted with its level's rail color. Sibling cards alternate between two strengths, so a comment stands apart from both its parent and its neighbors.
+- **Themes**: System (Dusk or Light), Dusk, Dark Reader (the warm grays Dark Reader gives HN), Dim, Black (OLED) and Light.
+- **Settings** (sliders icon or `?`): theme, thumbnails, open comments in a new tab or the same tab (auto: new tab on a laptop, same view on a phone), content width, and reply indent.
 
 | Key | Action |
 | --- | --- |
