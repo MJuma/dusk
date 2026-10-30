@@ -1,0 +1,339 @@
+:root {
+    color-scheme: dark;
+    --bg: #101216;
+    --surface: #171a1f;
+    --border: #23282f;
+    --text: #d6d9de;
+    --muted: #868d98;
+    --title: #eceef1;
+    --visited: #8f96a0;
+    --accent: #ff7a1a;
+    --link: #8cc4ff;
+    --rail-0: #ff8a3d;
+    --rail-1: #4fb3d9;
+    --rail-2: #a78bfa;
+    --rail-3: #6cc070;
+    --rail-4: #f06292;
+    --rail-5: #e5c07b;
+    --rail-6: #5c9cf5;
+    --rail-7: #4dd0b5;
+    --indent: 10px;
+    --rail: 2px;
+    --gutter: 0.75rem;
+    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: light) {
+    :root {
+        color-scheme: light;
+        --bg: #f6f6ef;
+        --surface: #ffffff;
+        --border: #e2e2d8;
+        --text: #1f2328;
+        --muted: #6a6f76;
+        --title: #111111;
+        --visited: #6f6f6f;
+        --accent: #e05a00;
+        --link: #0a58ca;
+        --rail-0: #e8710a;
+        --rail-1: #1b8fbf;
+        --rail-2: #7c5cd6;
+        --rail-3: #3f9a45;
+        --rail-4: #d23f74;
+        --rail-5: #b8901f;
+        --rail-6: #2f6fd6;
+        --rail-7: #1f9e86;
+    }
+}
+
+@media (min-width: 720px) {
+    :root {
+        --indent: 14px;
+        --gutter: 1rem;
+    }
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.45 var(--font);
+    -webkit-tap-highlight-color: transparent;
+}
+
+@media (min-width: 720px) {
+    body {
+        font-size: 14px;
+    }
+}
+
+a {
+    color: var(--link);
+}
+
+:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+#app {
+    max-width: 52rem;
+    margin: 0 auto;
+    padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* ── Top bar ─────────────────────────────────────────────── */
+
+.topbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: calc(env(safe-area-inset-top) + 0.4rem) var(--gutter) 0.4rem;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+}
+
+.brand {
+    color: var(--accent);
+    font-weight: 700;
+    text-decoration: none;
+    letter-spacing: 0.02em;
+}
+
+.tabs {
+    display: flex;
+    gap: 0.15rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.tab {
+    padding: 0.3rem 0.55rem;
+    border-radius: 6px;
+    color: var(--muted);
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.tab[aria-current='page'] {
+    background: var(--surface);
+    color: var(--title);
+}
+
+/* ── Feed ────────────────────────────────────────────────── */
+
+.stories {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.story {
+    display: grid;
+    grid-template-columns: 1.8em 1fr auto;
+    gap: 0 0.6rem;
+    padding: 0.55rem var(--gutter);
+    border-bottom: 1px solid var(--border);
+}
+
+.story-rank {
+    color: var(--muted);
+    font-size: 0.85em;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    padding-top: 0.1em;
+}
+
+.story-title {
+    color: var(--title);
+    font-weight: 500;
+    text-decoration: none;
+}
+
+.story-title:visited {
+    color: var(--visited);
+}
+
+.story-domain {
+    margin-left: 0.4em;
+    color: var(--muted);
+    font-size: 0.82em;
+}
+
+.thread-head .story-domain {
+    margin: 0 0.5em 0 0;
+}
+
+.story-meta {
+    margin-top: 0.15em;
+    color: var(--muted);
+    font-size: 0.8em;
+}
+
+.story-meta a {
+    color: var(--muted);
+}
+
+.story-comments {
+    align-self: center;
+    min-width: 2.8em;
+    padding: 0.35em 0.5em;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 0.82em;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    text-decoration: none;
+}
+
+.more {
+    display: block;
+    padding: 1rem;
+    color: var(--muted);
+    text-align: center;
+}
+
+.status {
+    padding: 2rem var(--gutter);
+    color: var(--muted);
+    text-align: center;
+}
+
+/* ── Thread ──────────────────────────────────────────────── */
+
+.thread-head {
+    padding: 0.75rem var(--gutter);
+    border-bottom: 1px solid var(--border);
+}
+
+.thread-title {
+    margin: 0 0 0.25rem;
+    font-size: 1.12em;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.thread-title a {
+    color: var(--title);
+    text-decoration: none;
+}
+
+.thread-text {
+    margin-top: 0.6rem;
+    overflow-wrap: anywhere;
+}
+
+/*
+ * Depth rails: one thin line per ancestor level, colored by level and cycling through 8 hues.
+ * A single repeating gradient sized to (depth + 1) * indent draws all of a row's rails, so stacked
+ * rows form continuous colored lines down the page.
+ */
+.c {
+    --x: calc(var(--d) * var(--indent));
+    padding: 0.35rem var(--gutter) 0.35rem calc(var(--gutter) + var(--x) + var(--indent));
+    background-image: repeating-linear-gradient(
+        to right,
+        var(--rail-0) 0 var(--rail),
+        transparent var(--rail) calc(1 * var(--indent)),
+        var(--rail-1) calc(1 * var(--indent)) calc(1 * var(--indent) + var(--rail)),
+        transparent calc(1 * var(--indent) + var(--rail)) calc(2 * var(--indent)),
+        var(--rail-2) calc(2 * var(--indent)) calc(2 * var(--indent) + var(--rail)),
+        transparent calc(2 * var(--indent) + var(--rail)) calc(3 * var(--indent)),
+        var(--rail-3) calc(3 * var(--indent)) calc(3 * var(--indent) + var(--rail)),
+        transparent calc(3 * var(--indent) + var(--rail)) calc(4 * var(--indent)),
+        var(--rail-4) calc(4 * var(--indent)) calc(4 * var(--indent) + var(--rail)),
+        transparent calc(4 * var(--indent) + var(--rail)) calc(5 * var(--indent)),
+        var(--rail-5) calc(5 * var(--indent)) calc(5 * var(--indent) + var(--rail)),
+        transparent calc(5 * var(--indent) + var(--rail)) calc(6 * var(--indent)),
+        var(--rail-6) calc(6 * var(--indent)) calc(6 * var(--indent) + var(--rail)),
+        transparent calc(6 * var(--indent) + var(--rail)) calc(7 * var(--indent)),
+        var(--rail-7) calc(7 * var(--indent)) calc(7 * var(--indent) + var(--rail)),
+        transparent calc(7 * var(--indent) + var(--rail)) calc(8 * var(--indent))
+    );
+    background-position: var(--gutter) 0;
+    background-size: calc(var(--x) + var(--indent)) 100%;
+    background-repeat: no-repeat;
+    content-visibility: auto;
+    contain-intrinsic-size: auto 6em;
+}
+
+.c-top {
+    margin-top: 0.4rem;
+    border-top: 1px solid var(--border);
+    padding-top: 0.6rem;
+}
+
+.c-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 0.5rem;
+    color: var(--muted);
+    font-size: 0.8em;
+}
+
+.c-toggle {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    font-family: var(--mono);
+    cursor: pointer;
+}
+
+.c-author {
+    color: var(--text);
+    font-weight: 600;
+}
+
+.c-op {
+    color: var(--accent);
+}
+
+.c-action {
+    color: var(--muted);
+    text-decoration: none;
+}
+
+.c-collapsed {
+    opacity: 0.65;
+}
+
+.c-body {
+    margin-top: 0.1rem;
+    overflow-wrap: anywhere;
+}
+
+.c-body p,
+.thread-text p {
+    margin: 0.5em 0 0;
+}
+
+.c-body pre,
+.thread-text pre {
+    margin: 0.5em 0 0;
+    padding: 0.5em 0.6em;
+    overflow-x: auto;
+    border-radius: 6px;
+    background: var(--surface);
+    font: 0.85em/1.4 var(--mono);
+    white-space: pre;
+}

@@ -1,0 +1,12 @@
+{
+    // Dusk lint entry point: traverse's framework-agnostic base rules plus the
+    // React/JSX rules (Preact uses the same JSX and hooks semantics).
+    "$schema": "./node_modules/oxlint/configuration_schema.json",
+    "extends": ["./oxlintrc.base.json", "./oxlintrc.react.json"],
+    "settings": {
+        "react": {
+            "version": "18.3"
+        }
+    },
+    "ignorePatterns": ["dist/**", "dev-dist/**", "node_modules/**", "src/data/fixtures/**"]
+}
