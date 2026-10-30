@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 
+import { online } from '../app/online';
 import { refreshTick } from '../app/refresh';
+import { SAVED_HREF } from '../app/router';
 import { PAGE_SIZE, source } from '../data/source';
 import type { FeedPage } from '../data/source';
 import type { FeedKind, Story } from '../data/types';
@@ -134,6 +136,13 @@ export function FeedView({ kind, page }: FeedViewProps) {
     }, [pages]);
 
     if (pages.length === 0) {
+        if (error && !online.value) {
+            return (
+                <main class="status">
+                    You're offline. Stories you saved are in <a href={SAVED_HREF}>Saved</a>.
+                </main>
+            );
+        }
         return <main class="status">{error ?? 'Loading…'}</main>;
     }
     return (

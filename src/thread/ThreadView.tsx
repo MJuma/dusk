@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 
+import { online } from '../app/online';
 import { refreshTick } from '../app/refresh';
-import { userHref } from '../app/router';
+import { readHref, userHref } from '../app/router';
 import { settingsOpen } from '../app/settings';
 import { getVisit, markSeen, recordThreadLoad } from '../app/visits';
 import type { Visit } from '../app/visits';
@@ -9,7 +10,8 @@ import { hnItemUrl } from '../data/hn';
 import { source } from '../data/source';
 import type { Thread } from '../data/types';
 import { sanitizeHnHtml } from '../lib/sanitize';
-import { timeAgo } from '../lib/time';
+import { ago, timeAgo } from '../lib/time';
+import { savedItems, savedThread, saveSheet } from '../offline/saved';
 import { CommentRow } from './CommentRow';
 import { readingLine, rowAtLine, rowElement, scrollToRow, topbarBottom } from './navigation';
 import type { Command } from './navigation';
@@ -41,10 +43,6 @@ function isTyping(target: EventTarget | null): boolean {
     return target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName));
 }
 
-function ago(epochMs: number): string {
-    const age = timeAgo(Math.floor(epochMs / 1000));
-    return age === 'now' ? 'just now' : `${age} ago`;
-}
 
 interface ThreadViewProps {
     id: number;
@@ -72,17 +70,34 @@ export function ThreadView({ id, focus }: ThreadViewProps) {
     const [currentThread, setCurrentThread] = useState(0);
     const loadsRef = useRef(0);
     const seenThisViewRef = useRef(new Set<number>());
+    /** When the thread shown is the copy saved for offline reading, when that copy was saved. */
+    const [savedCopyAt, setSavedCopyAt] = useState<number>();
 
     useEffect(() => {
         // The first load compares against the visit read at mount; a refresh against the latest one.
         const refreshed = loadsRef.current > 0 ? { visit: getVisit(id) } : undefined;
         loadsRef.current += 1;
         let active = true;
+        let fresh = false;
         const accept = (next: Thread): void => {
             if (active) {
+                fresh = true;
+                setSavedCopyAt(undefined);
                 setLoaded((current) => ({ thread: next, previous: refreshed ? refreshed.visit : current.previous }));
             }
         };
+        // A copy saved for offline reading shows right away (and is all there is without a
+        // connection); the network version replaces it when it arrives.
+        if (!source.cachedThread(id)) {
+            savedThread(id)
+                .then((copy) => {
+                    if (copy && active && !fresh) {
+                        setSavedCopyAt(copy.savedAt);
+                        setLoaded((current) => (current.thread ? current : { ...current, thread: copy.thread }));
+                    }
+                })
+                .catch(() => undefined);
+        }
         setError(undefined);
         performance.mark('dusk:thread-start');
         source.thread(id, accept)
@@ -226,6 +241,12 @@ export function ThreadView({ id, focus }: ThreadViewProps) {
         }
     }, [focus, thread, index, jumpTo]);
 
+    const openSave = useCallback(() => {
+        if (thread) {
+            saveSheet.value = thread.story;
+        }
+    }, [thread]);
+
     const nextNew = useCallback(() => {
         navigate('next-new');
     }, [navigate]);
@@ -326,17 +347,29 @@ export function ThreadView({ id, focus }: ThreadViewProps) {
     }, [id, newIds, rendered]);
 
     if (!thread) {
+        if (error && !online.value) {
+            return <main class="status">You're offline and this thread isn't saved for offline reading.</main>;
+        }
         return <main class="status">{error ?? 'Loading…'}</main>;
     }
     const { story } = thread;
     const lastLoad = previous?.commentsAt;
+    const saved = savedItems.value.get(story.id);
+    let status = error ? `Couldn't refresh: ${error}` : undefined;
+    if (savedCopyAt !== undefined) {
+        status = error || !online.value ? `Offline · showing the copy saved ${ago(savedCopyAt)}` : `Showing the copy saved ${ago(savedCopyAt)} · updating…`;
+    }
     return (
         <main class="thread">
             <header class="thread-head">
                 <h1 class="thread-title">
-                    {story.url
-                        ? <a href={story.url} target="_blank" rel="noopener noreferrer">{story.title}</a>
-                        : story.title}
+                    {story.url && !(saved?.article && !online.value) && (
+                        <a href={story.url} target="_blank" rel="noopener noreferrer">
+                            {story.title}
+                        </a>
+                    )}
+                    {story.url && saved?.article && !online.value && <a href={readHref(story.id)}>{story.title}</a>}
+                    {!story.url && story.title}
                 </h1>
                 <div class="story-meta">
                     {story.domain && <span class="story-domain">{story.domain}</span>}
@@ -348,6 +381,16 @@ export function ThreadView({ id, focus }: ThreadViewProps) {
                     <a href={hnItemUrl(story.id)} target="_blank" rel="noopener noreferrer">
                         Open on HN
                     </a>
+                    {' · '}
+                    <button type="button" class={saved ? 'save-btn save-btn-saved' : 'save-btn'} onClick={openSave}>
+                        {saved ? 'saved' : 'save for offline'}
+                    </button>
+                    {saved?.article && (
+                        <>
+                            {' · '}
+                            <a href={readHref(story.id)}>read saved article</a>
+                        </>
+                    )}
                 </div>
                 {lastLoad !== undefined && (
                     <p class="thread-new">
@@ -363,7 +406,7 @@ export function ThreadView({ id, focus }: ThreadViewProps) {
                 )}
                 {storyBody && <div class="thread-text" dangerouslySetInnerHTML={storyBody} />}
             </header>
-            {error && <p class="status">Couldn't refresh: {error}</p>}
+            {status && <p class="status">{status}</p>}
             <section class="comments" aria-label="Comments">
                 {rendered.map(({ comment, collapsed, newInside }) => (
                     <CommentRow

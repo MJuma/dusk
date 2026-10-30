@@ -6,7 +6,8 @@ import { VitePWA } from 'vite-plugin-pwa';
 const CONTENT_SECURITY_POLICY = [
     "default-src 'self'",
     "connect-src 'self' https://hacker-news.firebaseio.com https://hn.algolia.com https://r.jina.ai",
-    "img-src 'self' data: https://v1.opengraph.11ty.dev https://icons.duckduckgo.com",
+    // Thumbnails come from 11ty/DuckDuckGo, and saved articles show their own images when online.
+    "img-src 'self' data: https:",
     "style-src 'self'",
     "script-src 'self'",
     "base-uri 'self'",

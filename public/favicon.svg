@@ -5,11 +5,15 @@
             <stop offset="1" stop-color="#ff6600"/>
         </linearGradient>
     </defs>
-    <rect width="512" height="512" rx="112" fill="#101216"/>
-    <path d="M136 300a120 120 0 0 1 240 0z" fill="url(#sun)"/>
-    <g stroke-linecap="round" stroke-width="18">
-        <path d="M126 342h260" stroke="#ff8a3d"/>
-        <path d="M161 378h190" stroke="#4fb3d9"/>
-        <path d="M196 414h120" stroke="#a78bfa"/>
+    <!-- Full-bleed square: iOS and Android apply their own rounded mask, so no corners or padding here. -->
+    <rect width="512" height="512" fill="#101216"/>
+    <!-- Artwork scaled up and centered, staying inside the maskable-icon safe zone (80% circle). -->
+    <g transform="translate(256 256) scale(1.25) translate(-256 -301)">
+        <path d="M136 300a120 120 0 0 1 240 0z" fill="url(#sun)"/>
+        <g stroke-linecap="round" stroke-width="18">
+            <path d="M126 342h260" stroke="#ff8a3d"/>
+            <path d="M161 378h190" stroke="#4fb3d9"/>
+            <path d="M196 414h120" stroke="#a78bfa"/>
+        </g>
     </g>
 </svg>

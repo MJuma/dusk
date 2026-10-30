@@ -466,6 +466,39 @@ svg {
     text-align: center;
 }
 
+/* "save" / "saved" in a story's info line and the thread header. */
+.save-btn {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    cursor: pointer;
+}
+
+.save-btn:hover {
+    color: var(--title);
+    text-decoration: underline;
+}
+
+.save-btn-saved {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.save-btn-saved::before {
+    content: '✓ ';
+}
+
+.offline-banner {
+    margin: 0;
+    padding: 0.35rem var(--gutter);
+    background: var(--surface);
+    color: var(--muted);
+    font-size: 0.85em;
+    text-align: center;
+}
+
 .link-btn {
     padding: 0;
     border: 0;
@@ -942,4 +975,151 @@ svg {
     display: flex;
     gap: 0.15rem;
     margin-top: 0.75rem;
+}
+
+/* ── Save for offline ────────────────────────────────────── */
+
+.sheet-story {
+    margin: 0 0 0.75rem;
+    color: var(--title);
+    font-weight: 600;
+}
+
+.sheet-parts {
+    display: grid;
+    gap: 0.35rem;
+    margin: 0 0 1rem;
+    font-size: 0.9em;
+}
+
+.sheet-parts div {
+    display: grid;
+    grid-template-columns: 7rem 1fr;
+}
+
+.sheet-parts dt {
+    color: var(--muted);
+}
+
+.sheet-parts dd {
+    margin: 0;
+}
+
+.sheet-saving {
+    color: var(--title);
+}
+
+.sheet-saved {
+    color: var(--accent);
+}
+
+.sheet-error {
+    color: #f06292;
+}
+
+.sheet-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.sheet-btn {
+    flex: 1 1 auto;
+    min-height: 40px;
+    padding: 0.45rem 0.9rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--title);
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.sheet-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.sheet-primary {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--on-accent);
+}
+
+.sheet-links {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1rem;
+    font-size: 0.9em;
+}
+
+.sheet-remove {
+    margin-left: auto;
+    color: #f06292;
+    text-decoration: none;
+}
+
+.sheet-note {
+    margin: 1rem 0 0;
+    color: var(--muted);
+    font-size: 0.8em;
+}
+
+/* ── Reader view ─────────────────────────────────────────── */
+
+.article-body {
+    padding: 0.5rem var(--gutter) 3rem;
+    color: var(--text);
+    font-size: 1.05em;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+
+.article-body :is(h1, h2, h3, h4, h5, h6) {
+    margin: 1.4em 0 0.4em;
+    color: var(--title);
+    line-height: 1.3;
+}
+
+.article-body :is(p, ul, ol, blockquote, pre, table, figure) {
+    margin: 0 0 1em;
+}
+
+.article-body blockquote {
+    padding-left: 1em;
+    border-left: 3px solid var(--border);
+    color: var(--muted);
+}
+
+.article-body img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 6px;
+}
+
+.article-body pre {
+    padding: 0.6em 0.75em;
+    overflow-x: auto;
+    border-radius: 6px;
+    background: var(--surface);
+    font: 0.85em/1.45 var(--mono);
+}
+
+.article-body table {
+    display: block;
+    overflow-x: auto;
+    border-collapse: collapse;
+}
+
+.article-body :is(th, td) {
+    padding: 0.3em 0.6em;
+    border: 1px solid var(--border);
+}
+
+.article-missing-image {
+    color: var(--muted);
+    font-size: 0.85em;
+    font-style: italic;
 }

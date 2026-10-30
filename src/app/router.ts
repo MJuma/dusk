@@ -8,7 +8,11 @@ export type Route =
     | { name: 'feed'; kind: FeedKind; page: number }
     /** `focus` is a comment to jump to once the thread has loaded. */
     | { name: 'item'; id: number; focus?: number }
-    | { name: 'user'; id: string; tab: UserTab };
+    | { name: 'user'; id: string; tab: UserTab }
+    /** Stories saved for offline reading. */
+    | { name: 'saved' }
+    /** A saved article in reader view. */
+    | { name: 'read'; id: number };
 
 export const FEEDS: readonly FeedKind[] = ['top', 'new', 'best', 'ask', 'show', 'jobs'];
 
@@ -18,6 +22,12 @@ export function parseHash(hash: string): Route {
     const [first, second, third] = hash.replace(/^#\/?/, '').split('/');
     if (first === 'item' && second && NUMBER.test(second)) {
         return third && NUMBER.test(third) ? { name: 'item', id: Number(second), focus: Number(third) } : { name: 'item', id: Number(second) };
+    }
+    if (first === 'saved') {
+        return { name: 'saved' };
+    }
+    if (first === 'read' && second && NUMBER.test(second)) {
+        return { name: 'read', id: Number(second) };
     }
     if (first === 'user' && second) {
         return { name: 'user', id: decodeURIComponent(second), tab: third === 'comments' ? 'comments' : 'submissions' };
@@ -35,6 +45,12 @@ export function itemHref(id: number, focus?: number): string {
     return focus === undefined ? `#/item/${id}` : `#/item/${id}/${focus}`;
 }
 
+export const SAVED_HREF = '#/saved';
+
+export function readHref(id: number): string {
+    return `#/read/${id}`;
+}
+
 export function userHref(id: string, tab: UserTab = 'submissions'): string {
     const base = `#/user/${encodeURIComponent(id)}`;
     return tab === 'comments' ? `${base}/comments` : base;
@@ -48,6 +64,10 @@ export function routeKey(current: Route): string {
             return `user:${current.id}:${current.tab}`;
         case 'feed':
             return `feed:${current.kind}:${current.page}`;
+        case 'saved':
+            return 'saved';
+        case 'read':
+            return `read:${current.id}`;
     }
 }
 

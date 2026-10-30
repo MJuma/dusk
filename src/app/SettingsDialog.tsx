@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useLayoutEffect, useRef } from 'preact/hooks';
+import { useCallback } from 'preact/hooks';
 
 import { settings, settingsOpen, updateSettings } from './settings';
 import type { CommentsTarget, ContentWidth, IndentSize, Theme, Thumbnails } from './settings';
+import { useModalDialog } from './useModalDialog';
+import { CLOSE_ICON } from './icons';
 
 interface Option {
     value: string;
@@ -49,12 +51,6 @@ const SHORTCUTS: readonly [string, string][] = [
     ['?', 'This panel'],
 ];
 
-const CLOSE_ICON = (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M6 6l12 12M18 6L6 18" />
-    </svg>
-);
-
 const setTheme = (value: string): void => {
     updateSettings({ theme: value as Theme });
 };
@@ -101,44 +97,9 @@ function Choice({ legend, name, value, options, onChange }: ChoiceProps) {
 }
 
 export function SettingsDialog() {
-    const dialog = useRef<HTMLDialogElement>(null);
     const open = settingsOpen.value;
+    const dialog = useModalDialog(open, close);
     const current = settings.value;
-
-    useLayoutEffect(() => {
-        const element = dialog.current;
-        if (open && element && !element.open) {
-            element.showModal();
-        } else if (!open && element?.open) {
-            element.close();
-        }
-    }, [open]);
-
-    // Clicking the backdrop closes the panel. The panel's content fills the <dialog>, so only
-    // backdrop clicks target the <dialog> itself; requiring the press to start there too keeps a
-    // text selection that ends outside the panel from closing it.
-    useEffect(() => {
-        const element = dialog.current;
-        if (!element) {
-            return undefined;
-        }
-        let pressedBackdrop = false;
-        const onPointerDown = (event: PointerEvent): void => {
-            pressedBackdrop = event.target === element;
-        };
-        const onClick = (event: MouseEvent): void => {
-            if (pressedBackdrop && event.target === element) {
-                close();
-            }
-            pressedBackdrop = false;
-        };
-        element.addEventListener('pointerdown', onPointerDown);
-        element.addEventListener('click', onClick);
-        return () => {
-            element.removeEventListener('pointerdown', onPointerDown);
-            element.removeEventListener('click', onClick);
-        };
-    }, []);
 
     return (
         <dialog ref={dialog} class="settings" aria-labelledby="settings-title" onClose={close}>

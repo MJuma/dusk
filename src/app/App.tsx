@@ -1,10 +1,15 @@
 import { useLayoutEffect } from 'preact/hooks';
 
 import { FeedView } from '../feed/FeedView';
+import { ArticleView } from '../offline/ArticleView';
+import { SavedView } from '../offline/SavedView';
+import { SaveSheet } from '../offline/SaveSheet';
 import { ThreadView } from '../thread/ThreadView';
 import { UserView } from '../user/UserView';
+import { SAVED_ICON } from './icons';
+import { online } from './online';
 import { refresh } from './refresh';
-import { FEEDS, feedHref, route, routeKey, savedScroll } from './router';
+import { FEEDS, feedHref, route, routeKey, SAVED_HREF, savedScroll } from './router';
 import { settingsOpen } from './settings';
 import { SettingsDialog } from './SettingsDialog';
 import { dismissToast, toast } from './toast';
@@ -110,6 +115,9 @@ export function App() {
                         </a>
                     ))}
                 </nav>
+                <a class="icon-btn" href={SAVED_HREF} title="Saved for offline" aria-label="Saved for offline" aria-current={current.name === 'saved' ? 'page' : undefined}>
+                    {SAVED_ICON}
+                </a>
                 <button type="button" class="icon-btn" title="Refresh" aria-label="Refresh" onClick={refresh}>
                     {REFRESH_ICON}
                 </button>
@@ -117,10 +125,18 @@ export function App() {
                     {SETTINGS_ICON}
                 </button>
             </header>
+            {!online.value && (
+                <p class="offline-banner">
+                    Offline · saved stories still open. <a href={SAVED_HREF}>Saved</a>
+                </p>
+            )}
             {current.name === 'item' && <ThreadView key={key} id={current.id} focus={current.focus} />}
             {current.name === 'user' && <UserView key={key} id={current.id} tab={current.tab} />}
             {current.name === 'feed' && <FeedView key={key} kind={current.kind} page={current.page} />}
+            {current.name === 'saved' && <SavedView key={key} />}
+            {current.name === 'read' && <ArticleView key={key} id={current.id} />}
             <SettingsDialog />
+            <SaveSheet />
             <ToastView />
         </>
     );

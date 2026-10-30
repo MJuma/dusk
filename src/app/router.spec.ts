@@ -14,6 +14,12 @@ describe('router', () => {
         expect(parseHash('#/item/123')).toEqual({ name: 'item', id: 123 });
     });
 
+    it('parses the saved list and the reader view', () => {
+        expect(parseHash('#/saved')).toEqual({ name: 'saved' });
+        expect(parseHash('#/read/42')).toEqual({ name: 'read', id: 42 });
+        expect(parseHash('#/read/x')).toEqual({ name: 'feed', kind: 'top', page: 0 });
+    });
+
     it('builds links that round-trip', () => {
         expect(parseHash(userHref('a b', 'comments'))).toEqual({ name: 'user', id: 'a b', tab: 'comments' });
         expect(parseHash(itemHref(1, 2))).toEqual({ name: 'item', id: 1, focus: 2 });

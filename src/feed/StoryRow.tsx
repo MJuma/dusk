@@ -1,13 +1,15 @@
 import { memo } from 'preact/compat';
 import { useCallback } from 'preact/hooks';
 
-import { itemHref, userHref } from '../app/router';
+import { online } from '../app/online';
+import { itemHref, readHref, userHref } from '../app/router';
 import { commentsInNewTab, settings } from '../app/settings';
 import { showToast } from '../app/toast';
 import { recordLinkOpen, visits } from '../app/visits';
 import { source } from '../data/source';
 import type { Story } from '../data/types';
 import { timeAgo } from '../lib/time';
+import { saveProgress, savedItems, saveSheet } from '../offline/saved';
 import { newCommentEstimate } from '../thread/newComments';
 import { Thumbnail } from './Thumbnail';
 
@@ -25,6 +27,14 @@ export const StoryRow = memo(function StoryRow({ story, rank }: StoryRowProps) {
     // Text posts have no separate link: reading the comments is reading the story.
     const read = visit?.linkAt !== undefined || (!external && commentsRead);
     const fresh = commentsRead ? newCommentEstimate(story.descendants, visit) : 0;
+    const saved = savedItems.value.get(story.id);
+    const saving = (saveProgress.value.get(story.id)?.saving.size ?? 0) > 0;
+    // Offline, a saved article opens in the reader instead of the (unreachable) original.
+    const readSaved = !online.value && saved?.article !== undefined;
+    let linkHref = story.url ?? itemHref(story.id);
+    if (readSaved) {
+        linkHref = readHref(story.id);
+    }
 
     const openLink = useCallback((): void => {
         recordLinkOpen(story.id);
@@ -49,6 +59,9 @@ export const StoryRow = memo(function StoryRow({ story, rank }: StoryRowProps) {
             });
         }
     }, [story.id, story.url]);
+    const openSave = useCallback((): void => {
+        saveSheet.value = story;
+    }, [story]);
     const prefetch = useCallback((): void => {
         // A new tab can't reuse this tab's request, so only warm up same-tab opens.
         if (!newTab) {
@@ -83,17 +96,17 @@ export const StoryRow = memo(function StoryRow({ story, rank }: StoryRowProps) {
                     key={thumbnails}
                     story={story}
                     mode={thumbnails}
-                    href={story.url ?? itemHref(story.id)}
-                    target={external ? '_blank' : commentsTarget}
+                    href={linkHref}
+                    target={external && !readSaved ? '_blank' : commentsTarget}
                     onOpen={external ? openLink : undefined}
                 />
             )}
             <div class="story-main">
                 <a
                     class="story-title"
-                    href={story.url ?? itemHref(story.id)}
-                    target={external ? '_blank' : commentsTarget}
-                    rel={external ? 'noopener noreferrer' : commentsRel}
+                    href={linkHref}
+                    target={external && !readSaved ? '_blank' : commentsTarget}
+                    rel={external && !readSaved ? 'noopener noreferrer' : commentsRel}
                     onClick={external ? openLink : undefined}
                     onAuxClick={external ? openLink : undefined}
                 >
@@ -105,7 +118,10 @@ export const StoryRow = memo(function StoryRow({ story, rank }: StoryRowProps) {
                     <a class="story-by" href={userHref(story.by)} target={commentsTarget} rel={commentsRel} onPointerDown={prefetchUser} onMouseEnter={prefetchUser}>
                         {story.by}
                     </a>
-                    {' '}· {timeAgo(story.time)}
+                    {' '}· {timeAgo(story.time)} ·{' '}
+                    <button type="button" class={saved ? 'save-btn save-btn-saved' : 'save-btn'} onClick={openSave}>
+                        {saving ? 'saving…' : saved ? 'saved' : 'save'}
+                    </button>
                     {story.type !== 'job' && (
                         <span class="story-actions">
                             {' · '}
