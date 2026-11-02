@@ -75,8 +75,6 @@ export const SCHEMA = {
     // Posts
     /** The buttons under each story: "discuss", "link + discuss", both or neither. */
     storyButtons: choice(['comments', 'link', 'both', 'none'], () => (laptop() ? 'both' : 'none'), 'story-buttons'),
-    /** Open story links in Dusk's reader view, or in the browser. */
-    openLinks: choice(['browser', 'reader'], 'browser'),
     // Comments
     /** New tab on a laptop; in place on phones, tablets and in the installed app. */
     commentsTarget: choice(['same', 'new'], () => (laptop() && !isInstalledApp() ? 'new' : 'same')),

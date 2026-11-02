@@ -22,7 +22,7 @@ interface StoryRowProps {
 
 export const StoryRow = memo(function StoryRow({ story, rank }: StoryRowProps) {
     const visit = visits.value.get(story.id);
-    const { thumbnails, openLinks } = settings.value;
+    const { thumbnails } = settings.value;
     const split = splitActive.value;
     const newTab = commentsInNewTab(settings.value, split);
     const open = route.value;
@@ -35,9 +35,8 @@ export const StoryRow = memo(function StoryRow({ story, rank }: StoryRowProps) {
     const fresh = commentsRead ? newCommentEstimate(story.descendants, visit) : 0;
     const saved = savedItems.value.get(story.id);
     const saving = (saveProgress.value.get(story.id)?.saving.size ?? 0) > 0;
-    // Links open in Dusk's reader view when chosen in Settings, and offline when the article is saved
-    // (the original is unreachable then).
-    const readSaved = external && (openLinks === 'reader' || (!online.value && saved?.article !== undefined));
+    // Offline, a saved article opens in the reader instead of the (unreachable) original.
+    const readSaved = external && !online.value && saved?.article !== undefined;
     let linkHref = story.url ?? itemHref(story.id);
     if (readSaved) {
         linkHref = readHref(story.id);

@@ -138,9 +138,6 @@ export const PAGES: readonly Page[] = [
                     choice('storyButtons', 'Story Buttons', 'segmented', { comments: 'Comments', link: 'Link', both: 'Both', none: 'None' }, {
                         help: 'Under each story: Comments is “discuss”, Link is “link + discuss”.',
                     }),
-                    choice('openLinks', 'Open Links In', 'segmented', { browser: 'Browser', reader: 'Reader' }, {
-                        help: 'Reader shows the article’s text inside Dusk (from r.jina.ai), with a link to the original.',
-                    }),
                 ],
             },
         ],

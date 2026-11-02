@@ -4,7 +4,6 @@ import { online } from '../app/online';
 import { refreshTick, tracked } from '../app/refresh';
 import { fromHref, itemHref, readHref, replaceRoute, userHref } from '../app/router';
 import { useKeyScope } from '../app/keymap';
-import { settings } from '../app/settings';
 import type { CommentTarget, ThreadController } from '../app/actions';
 import { lazyComponent } from '../app/lazy';
 import { setPageTitle } from '../app/title';
@@ -463,8 +462,8 @@ export function ThreadView({ id, focus }: ThreadViewProps) {
     const { story } = thread;
     const lastLoad = previous?.commentsAt;
     const saved = savedItems.value.get(story.id);
-    // The story's link opens in the reader when chosen in Settings, or offline when its text is saved.
-    const inReader = settings.value.openLinks === 'reader' || (saved?.article !== undefined && !online.value);
+    // Offline, the story's link opens its saved text in the reader.
+    const inReader = saved?.article !== undefined && !online.value;
     let status = error ? `Couldn't refresh: ${error}` : undefined;
     if (copy) {
         const which = copy.saved ? `the copy saved ${ago(copy.at)}` : `the copy from ${ago(copy.at)}`;
