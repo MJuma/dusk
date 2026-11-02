@@ -1,36 +1,7 @@
-import { signal } from '@preact/signals';
 import { useCallback, useState } from 'preact/hooks';
 
-import { isInstalledApp } from './settings';
-
-/** Chromium's install prompt event (not in TypeScript's DOM types). */
-interface BeforeInstallPromptEvent extends Event {
-    prompt: () => Promise<void>;
-}
-
-const DISMISSED_KEY = 'dusk:install-dismissed';
-const installPrompt = signal<BeforeInstallPromptEvent | undefined>(undefined);
-
-window.addEventListener('beforeinstallprompt', (event) => {
-    event.preventDefault();
-    installPrompt.value = event as BeforeInstallPromptEvent;
-});
-window.addEventListener('appinstalled', () => {
-    installPrompt.value = undefined;
-});
-
-function isIos(): boolean {
-    // iPadOS reports itself as a Mac; touch support tells them apart.
-    return /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.userAgent.includes('Macintosh') && navigator.maxTouchPoints > 1);
-}
-
-function wasDismissed(): boolean {
-    try {
-        return localStorage.getItem(DISMISSED_KEY) === '1';
-    } catch {
-        return false;
-    }
-}
+import { isIos } from './device';
+import { DISMISSED_KEY, installPrompt, wasDismissed } from './install';
 
 const SHARE_ICON = (
     <svg class="install-share" viewBox="0 0 24 24" aria-hidden="true">
@@ -60,7 +31,7 @@ export function InstallNudge() {
     }, [prompt]);
 
     const ios = isIos();
-    if (dismissed || isInstalledApp() || (!prompt && !ios)) {
+    if (dismissed || (!prompt && !ios)) {
         return null;
     }
     return (

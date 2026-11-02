@@ -1,11 +1,12 @@
-import { memo } from 'preact/compat';
+import { memo } from '../lib/memo';
 import { useCallback, useMemo } from 'preact/hooks';
 
-import { userHref } from '../app/router';
+import { itemHref, userHref } from '../app/router';
 import { hnItemUrl, hnReplyUrl } from '../data/hn';
 import type { ThreadComment } from '../data/types';
+import { nameHue } from '../lib/nameHue';
 import { sanitizeHnHtml } from '../lib/sanitize';
-import { timeAgo } from '../lib/time';
+import { fullTime, hnAge, isoTime } from '../lib/time';
 import type { CommentLinks } from './threadIndex';
 
 interface CommentRowProps {
@@ -41,7 +42,7 @@ function hiddenLabel(comment: ThreadComment, newInside: number): string {
 
 export const CommentRow = memo(function CommentRow({ comment, storyId, isOp, collapsed, newInside, isNew, focused, links, onToggle, onJump, onMenu }: CommentRowProps) {
     const body = useMemo(() => ({ __html: sanitizeHnHtml(comment.html) }), [comment.html]);
-    const style = useMemo(() => ({ '--d': comment.depth }), [comment.depth]);
+    const style = useMemo(() => ({ '--d': comment.depth, '--name-h': comment.author ? nameHue(comment.author) : 0 }), [comment.depth, comment.author]);
     const toggle = useCallback((): void => {
         onToggle(comment.id);
     }, [onToggle, comment.id]);
@@ -73,6 +74,10 @@ export const CommentRow = memo(function CommentRow({ comment, storyId, isOp, col
                         {comment.author}
                     </a>
                 )}
+                {/* Like HN's: a permalink to the comment, with the exact time on hover. */}
+                <a class="c-age" href={itemHref(storyId, comment.id)} title={fullTime(comment.time)}>
+                    <time dateTime={isoTime(comment.time)}>{hnAge(comment.time)}</time>
+                </a>
                 {isNew && <span class="c-new-badge">new</span>}
                 <button
                     class={collapsed ? 'c-toggle' : 'c-toggle c-toggle-quiet'}
@@ -101,12 +106,9 @@ export const CommentRow = memo(function CommentRow({ comment, storyId, isOp, col
                         HN
                     </a>
                 </span>
-                <span class="c-tail">
-                    <button class="c-more phone-only" type="button" aria-label="Comment actions" onClick={openMenu}>
-                        {MORE_ICON}
-                    </button>
-                    <span class="c-age">{timeAgo(comment.time)}</span>
-                </span>
+                <button class="c-more phone-only" type="button" aria-label="Comment actions" onClick={openMenu}>
+                    {MORE_ICON}
+                </button>
             </header>
             {!collapsed && <div class="c-body" dangerouslySetInnerHTML={body} />}
         </article>

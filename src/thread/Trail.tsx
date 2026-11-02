@@ -1,4 +1,4 @@
-import { memo } from 'preact/compat';
+import { memo } from '../lib/memo';
 import { useCallback, useLayoutEffect, useRef } from 'preact/hooks';
 
 import type { ThreadComment } from '../data/types';

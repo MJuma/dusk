@@ -2,19 +2,22 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 
 import { online } from '../app/online';
 import { refreshTick } from '../app/refresh';
-import { fromHref, itemHref, readHref, userHref } from '../app/router';
-import { settingsOpen } from '../app/settings';
+import { fromHref, itemHref, readHref, replaceRoute, userHref } from '../app/router';
+import { useKeyScope } from '../app/keymap';
+import { settings } from '../app/settings';
+import type { CommentTarget, ThreadController } from '../app/actions';
+import { lazyComponent } from '../app/lazy';
 import { setPageTitle } from '../app/title';
 import { getVisit, markSeen, recordThreadLoad } from '../app/visits';
 import type { Visit } from '../app/visits';
 import { hnItemUrl } from '../data/hn';
 import { readThread } from '../data/cache';
 import { source } from '../data/source';
-import type { Thread } from '../data/types';
+import type { Thread, ThreadComment } from '../data/types';
 import { sanitizeHnHtml } from '../lib/sanitize';
-import { ago, timeAgo } from '../lib/time';
+import { ago, fullTime, hnAge, isoTime } from '../lib/time';
 import { savedItems, savedThread, saveSheet } from '../offline/saved';
-import { CommentMenu } from './CommentMenu';
+import { commentRows } from '../gestures/rows';
 import { CommentRow } from './CommentRow';
 import { readingLine, rowAtLine, rowElement, scrollToRow, stickyBottom } from './navigation';
 import type { Command } from './navigation';
@@ -26,29 +29,13 @@ import { ThreadNav } from './ThreadNav';
 import { expandAncestors, isCollapsed, visibleRows } from './ThreadView.logic';
 import { Trail } from './Trail';
 
+const CommentMenu = lazyComponent(() => import('./CommentMenu').then((m) => m.CommentMenu));
+
 /** Rows rendered in the first frame; the rest follow right after so big threads paint quickly. */
 const FIRST_PAINT_ROWS = 80;
 /** A new comment counts as seen once it has been on screen this long. */
 const SEEN_DWELL_MS = 400;
 const SEEN_FLUSH_MS = 600;
-
-const KEYS: Record<string, Command> = {
-    j: 'next-comment',
-    k: 'prev-comment',
-    n: 'next-thread',
-    p: 'prev-thread',
-    N: 'next-new',
-    P: 'prev-new',
-    u: 'parent',
-    r: 'root',
-    c: 'toggle',
-    s: 'skim',
-};
-
-function isTyping(target: EventTarget | null): boolean {
-    return target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName));
-}
-
 
 interface ThreadViewProps {
     id: number;
@@ -164,7 +151,7 @@ export function ThreadView({ id, focus }: ThreadViewProps) {
         // A comment link resolves to its story: move to the story's address, scrolled to the comment.
         if (thread?.complete && thread.story.id !== id) {
             if (thread.focus !== undefined) {
-                location.replace(itemHref(thread.story.id, thread.focus));
+                replaceRoute(itemHref(thread.story.id, thread.focus));
             }
             return;
         }
@@ -261,11 +248,12 @@ export function ThreadView({ id, focus }: ThreadViewProps) {
         }
     }, [jumpTo, toggle]);
 
-    // Jump to the linked comment once its final position is known.
-    const focusedRef = useRef(false);
+    // Jump to the linked comment once its final position is known, and again whenever the address
+    // names another one (a comment's time is its permalink).
+    const focusedRef = useRef<number | undefined>(undefined);
     useEffect(() => {
-        if (focus !== undefined && !focusedRef.current && thread?.complete && index.position.has(focus)) {
-            focusedRef.current = true;
+        if (focus !== undefined && focusedRef.current !== focus && thread?.complete && index.position.has(focus)) {
+            focusedRef.current = focus;
             jumpTo(focus);
         }
     }, [focus, thread, index, jumpTo]);
@@ -314,11 +302,64 @@ export function ThreadView({ id, focus }: ThreadViewProps) {
         };
     }, [toggle, hasThread]);
 
+    // What the comment menu and swipe actions can do to this thread.
+    const controller = useMemo<ThreadController>(() => {
+        const commentById = (commentId: number): ThreadComment | undefined => {
+            const { thread: current, index: currentIndex } = latestRef.current;
+            return current?.comments[currentIndex.position.get(commentId) ?? -1];
+        };
+        return {
+            jumpTo,
+            isCollapsed: (commentId) => {
+                const comment = commentById(commentId);
+                return comment !== undefined && isCollapsed(comment, latestRef.current.toggled);
+            },
+            setCollapsed: (commentId, collapsed) => {
+                const comment = commentById(commentId);
+                if (comment) {
+                    setToggled((previous) => {
+                        if (isCollapsed(comment, previous) === collapsed) {
+                            return previous;
+                        }
+                        const next = new Set(previous);
+                        if (!next.delete(commentId)) {
+                            next.add(commentId);
+                        }
+                        return next;
+                    });
+                }
+            },
+            rootOf: (commentId) => {
+                let comment = commentById(commentId);
+                while (comment && comment.depth > 0) {
+                    comment = commentById(comment.parentId);
+                }
+                return comment?.id ?? commentId;
+            },
+        };
+    }, [jumpTo]);
+
+    // Swipes on comments act through the same controller as the menu.
+    useEffect(() => {
+        commentRows.target = (commentId) => {
+            const { thread: current, index: currentIndex } = latestRef.current;
+            const comment = current?.comments[currentIndex.position.get(commentId) ?? -1];
+            return comment && current ? { comment, storyId: current.story.id, links: currentIndex.links.get(commentId), thread: controller } : undefined;
+        };
+        return () => {
+            commentRows.target = undefined;
+        };
+    }, [controller]);
+
     const [menuId, setMenuId] = useState<number>();
     const closeMenu = useCallback(() => {
         setMenuId(undefined);
     }, []);
     const menuComment = menuId === undefined ? undefined : thread?.comments[index.position.get(menuId) ?? -1];
+    const menuTarget = useMemo<CommentTarget | undefined>(
+        () => (menuComment && thread ? { comment: menuComment, storyId: thread.story.id, links: index.links.get(menuComment.id), thread: controller } : undefined),
+        [menuComment, thread, index, controller],
+    );
 
     const openSave = useCallback(() => {
         if (thread) {
@@ -330,22 +371,10 @@ export function ThreadView({ id, focus }: ThreadViewProps) {
         navigate('next-new');
     }, [navigate]);
 
-    useEffect(() => {
-        const onKey = (event: KeyboardEvent): void => {
-            if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || settingsOpen.value || isTyping(event.target)) {
-                return;
-            }
-            const command = KEYS[event.key];
-            if (command) {
-                event.preventDefault();
-                navigate(command);
-            }
-        };
-        window.addEventListener('keydown', onKey);
-        return () => {
-            window.removeEventListener('keydown', onKey);
-        };
+    const onCommand = useCallback((command: string) => {
+        navigate(command as Command);
     }, [navigate]);
+    useKeyScope('thread', onCommand);
 
     // Track which top-level comment is at the reading line for the position indicator.
     useEffect(() => {
@@ -434,6 +463,8 @@ export function ThreadView({ id, focus }: ThreadViewProps) {
     const { story } = thread;
     const lastLoad = previous?.commentsAt;
     const saved = savedItems.value.get(story.id);
+    // The story's link opens in the reader when chosen in Settings, or offline when its text is saved.
+    const inReader = settings.value.openLinks === 'reader' || (saved?.article !== undefined && !online.value);
     let status = error ? `Couldn't refresh: ${error}` : undefined;
     if (copy) {
         const which = copy.saved ? `the copy saved ${ago(copy.at)}` : `the copy from ${ago(copy.at)}`;
@@ -447,12 +478,12 @@ export function ThreadView({ id, focus }: ThreadViewProps) {
         <main class="thread">
             <header class="thread-head">
                 <h1 class="thread-title">
-                    {story.url && !(saved?.article && !online.value) && (
+                    {story.url && !inReader && (
                         <a href={story.url} target="_blank" rel="noopener noreferrer">
                             {story.title}
                         </a>
                     )}
-                    {story.url && saved?.article && !online.value && <a href={readHref(story.id)}>{story.title}</a>}
+                    {story.url && inReader && <a href={readHref(story.id)}>{story.title}</a>}
                     {!story.url && story.title}
                 </h1>
                 <div class="story-meta">
@@ -465,7 +496,11 @@ export function ThreadView({ id, focus }: ThreadViewProps) {
                     <a class="story-by" href={userHref(story.by)}>
                         {story.by}
                     </a>
-                    {' '}· {timeAgo(story.time)} · {story.descendants} comments ·{' '}
+                    {' '}·{' '}
+                    <time dateTime={isoTime(story.time)} title={fullTime(story.time)}>
+                        {hnAge(story.time)}
+                    </time>
+                    {' '}· {story.descendants} comments ·{' '}
                     <a href={hnItemUrl(story.id)} target="_blank" rel="noopener noreferrer">
                         Open on HN
                     </a>
@@ -517,7 +552,7 @@ export function ThreadView({ id, focus }: ThreadViewProps) {
                     />
                 ))}
             </section>
-            {menuComment && <CommentMenu comment={menuComment} storyId={story.id} links={index.links.get(menuComment.id)} onJump={jumpTo} onClose={closeMenu} />}
+            {menuTarget && <CommentMenu target={menuTarget} onClose={closeMenu} />}
             {!thread.complete && <p class="status">Ordering replies…</p>}
             {thread.complete && thread.unavailable > 0 && (
                 <p class="status">

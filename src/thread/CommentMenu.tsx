@@ -1,62 +1,53 @@
 import { useCallback } from 'preact/hooks';
 
-import { CLOSE_ICON } from '../app/icons';
-import { useModalDialog } from '../app/useModalDialog';
-import { hnItemUrl, hnReplyUrl } from '../data/hn';
-import type { ThreadComment } from '../data/types';
-import type { CommentLinks } from './threadIndex';
+import { COMMENT_ACTIONS, COMMENT_MENU, isExternal, runAction } from '../app/actions';
+import type { CommentActionId, CommentTarget } from '../app/actions';
+import { Sheet } from '../app/Sheet';
 
 interface CommentMenuProps {
-    comment: ThreadComment;
-    storyId: number;
-    links: CommentLinks | undefined;
-    onJump: (id: number) => void;
+    target: CommentTarget;
     onClose: () => void;
 }
 
-const NAV_ITEMS = [
-    ['root', 'Root'],
-    ['parent', 'Parent'],
-    ['prev', 'Previous'],
-    ['next', 'Next'],
-] as const;
-
-/** A comment's actions on a phone, as a sheet at the bottom of the screen: HN's root/parent/prev/next, reply and HN. */
-export function CommentMenu({ comment, storyId, links, onJump, onClose }: CommentMenuProps) {
-    const dialog = useModalDialog(true, onClose);
-    const jump = useCallback((event: Event): void => {
+/** A comment's actions on a phone, as a sheet at the bottom of the screen. */
+export function CommentMenu({ target, onClose }: CommentMenuProps) {
+    const run = useCallback((event: Event): void => {
+        const id = (event.currentTarget as HTMLElement).dataset['action'] as CommentActionId;
+        // Run first: sharing needs the tap that opened it to still count as the user's.
+        runAction(COMMENT_ACTIONS[id], target);
         onClose();
-        onJump(Number((event.currentTarget as HTMLElement).dataset['target']));
-    }, [onClose, onJump]);
+    }, [target, onClose]);
 
+    const { author } = target.comment;
     return (
-        <dialog ref={dialog} class="settings comment-menu" aria-labelledby="comment-menu-title" onClose={onClose}>
-            <div class="settings-body">
-                <header class="settings-head">
-                    <h2 id="comment-menu-title">{comment.author ? `${comment.author}'s comment` : 'Comment'}</h2>
-                    <button type="button" class="icon-btn settings-close" aria-label="Close" onClick={onClose}>
-                        {CLOSE_ICON}
-                    </button>
-                </header>
-                <div class="menu-list">
-                    {NAV_ITEMS.map(([key, label]) => {
-                        const target = links?.[key];
-                        return target === undefined
-                            ? null
-                            : (
-                                <button key={key} type="button" class="menu-item" data-target={target} onClick={jump}>
-                                    {label}
-                                </button>
-                            );
-                    })}
-                    <a class="menu-item" href={hnReplyUrl(comment.id, storyId)} target="_blank" rel="noopener noreferrer" onClick={onClose}>
-                        Reply on HN
-                    </a>
-                    <a class="menu-item" href={hnItemUrl(comment.id)} target="_blank" rel="noopener noreferrer" onClick={onClose}>
-                        Open on HN
-                    </a>
-                </div>
+        <Sheet title={author ? `${author}'s comment` : 'Comment'} onClose={onClose} placement="bottom" flush>
+            <div class="menu-list">
+                {COMMENT_MENU.map((id) => {
+                    const action = COMMENT_ACTIONS[id];
+                    if (action.available && !action.available(target)) {
+                        return null;
+                    }
+                    const href = action.href?.(target);
+                    return href
+                        ? (
+                            <a
+                                key={id}
+                                class="menu-item"
+                                href={href}
+                                target={isExternal(href) ? '_blank' : undefined}
+                                rel={isExternal(href) ? 'noopener noreferrer' : undefined}
+                                onClick={onClose}
+                            >
+                                {action.label(target)}
+                            </a>
+                        )
+                        : (
+                            <button key={id} type="button" class="menu-item" data-action={id} onClick={run}>
+                                {action.label(target)}
+                            </button>
+                        );
+                })}
             </div>
-        </dialog>
+        </Sheet>
     );
 }

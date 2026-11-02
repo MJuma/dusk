@@ -1,7 +1,7 @@
 import { render } from 'preact';
-import { registerSW } from 'virtual:pwa-register';
 
 import { App } from './app/App';
+import { hasTouch } from './app/device';
 import { syncDocumentTitle } from './app/title';
 import { showToast } from './app/toast';
 import './styles/app.css';
@@ -9,9 +9,18 @@ import './styles/app.css';
 syncDocumentTitle();
 render(<App />, document.getElementById('app') as HTMLElement);
 
+// Swipe gestures only matter on touch screens; load them after the first paint.
+if (hasTouch()) {
+    window.setTimeout(() => {
+        import('./gestures/gestures').catch(() => undefined);
+    }, 0);
+}
+
 const UPDATE_CHECK_MS = 30 * 60 * 1000;
 
-if (import.meta.env.PROD) {
+/** Service worker registration and the "new version" prompt; not needed for the first paint. */
+async function registerServiceWorker(): Promise<void> {
+    const { registerSW } = await import('virtual:pwa-register');
     const updateSW = registerSW({
         immediate: true,
         onNeedRefresh() {
@@ -45,4 +54,10 @@ if (import.meta.env.PROD) {
             });
         },
     });
+}
+
+if (import.meta.env.PROD) {
+    window.setTimeout(() => {
+        registerServiceWorker().catch(() => undefined);
+    }, 0);
 }

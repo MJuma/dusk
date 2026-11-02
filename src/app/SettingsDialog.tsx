@@ -1,143 +1,219 @@
-import { useCallback } from 'preact/hooks';
+import { useCallback, useState } from 'preact/hooks';
 
+import type { KeyScope } from './keymap';
 import { settings, settingsOpen, updateSettings } from './settings';
-import type { CommentsTarget, ContentWidth, IndentSize, Theme, Thumbnails } from './settings';
-import { useModalDialog } from './useModalDialog';
-import { CLOSE_ICON } from './icons';
+import { PAGES } from './settings.pages';
+import type { ChoiceItem, Item, Page, PageId, SliderItem, SwitchItem } from './settings.pages';
+import { SCHEMA } from './settings.schema';
+import type { RangeDef, Settings } from './settings.schema';
+import { Sheet } from './Sheet';
+import { SHORTCUTS } from './shortcuts';
 
-interface Option {
-    value: string;
-    label: string;
-    /** Shows a preview chip in this theme's colors. */
-    swatch?: boolean;
-}
-
-const THEME_OPTIONS: readonly Option[] = [
-    { value: 'system', label: 'System (Dusk or Light)', swatch: true },
-    { value: 'dusk', label: 'Dusk', swatch: true },
-    { value: 'dark-reader', label: 'Dark Reader', swatch: true },
-    { value: 'dim', label: 'Dim', swatch: true },
-    { value: 'black', label: 'Black (OLED)', swatch: true },
-    { value: 'light', label: 'Light', swatch: true },
-];
-const THUMBNAIL_OPTIONS: readonly Option[] = [
-    { value: 'images', label: 'Article images (site icon when there is none)' },
-    { value: 'icons', label: 'Site icons only' },
-    { value: 'off', label: 'Off' },
-];
-
-const COMMENTS_OPTIONS: readonly Option[] = [
-    { value: 'auto', label: 'Auto: new tab on a laptop, same view on a phone' },
-    { value: 'same', label: 'Same tab' },
-    { value: 'new', label: 'New tab' },
-];
-const WIDTH_OPTIONS: readonly Option[] = [
-    { value: 'wide', label: 'Wide (85%, like HN)' },
-    { value: 'full', label: 'Full width' },
-    { value: 'narrow', label: 'Narrow' },
-];
-const INDENT_OPTIONS: readonly Option[] = [
-    { value: 'compact', label: 'Compact' },
-    { value: 'normal', label: 'Normal' },
-    { value: 'wide', label: 'Wide (like HN)' },
-];
-const SHORTCUTS: readonly [string, string][] = [
-    ['n / p', 'Next / previous top-level comment'],
-    ['j / k', 'Next / previous comment'],
-    ['N / P', 'Next / previous new comment'],
-    ['u', 'Parent'],
-    ['r', 'Root (top-level comment)'],
-    ['c', 'Collapse / expand'],
-    ['s', 'Collapse / expand all threads'],
-    ['/', 'Search'],
-    ['?', 'This panel'],
-];
-
-const setTheme = (value: string): void => {
-    updateSettings({ theme: value as Theme });
-};
-const setThumbnails = (value: string): void => {
-    updateSettings({ thumbnails: value as Thumbnails });
-};
-const setCommentsTarget = (value: string): void => {
-    updateSettings({ commentsTarget: value as CommentsTarget });
-};
-const setWidth = (value: string): void => {
-    updateSettings({ width: value as ContentWidth });
-};
-const setIndent = (value: string): void => {
-    updateSettings({ indent: value as IndentSize });
-};
 const close = (): void => {
     settingsOpen.value = false;
 };
 
-interface ChoiceProps {
-    legend: string;
-    name: string;
-    value: string;
-    options: readonly Option[];
-    onChange: (value: string) => void;
+const CHEVRON = (
+    <svg class="set-chevron" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M9 6l6 6-6 6" />
+    </svg>
+);
+
+const DONE = (
+    <button type="button" class="settings-done" onClick={close}>
+        Done
+    </button>
+);
+
+function set(key: keyof Settings, value: Settings[keyof Settings]): void {
+    updateSettings({ [key]: value });
 }
 
-function Choice({ legend, name, value, options, onChange }: ChoiceProps) {
-    const handle = useCallback((event: Event) => {
-        onChange((event.currentTarget as HTMLInputElement).value);
-    }, [onChange]);
+interface ItemProps<T extends Item> {
+    item: T;
+    current: Settings;
+    disabled: boolean;
+}
+
+function ItemText({ item }: { item: Item }) {
     return (
-        <fieldset class="choice">
-            <legend>{legend}</legend>
-            {options.map((option) => (
-                <label key={option.value} class="choice-option">
-                    <input type="radio" name={name} value={option.value} checked={option.value === value} onChange={handle} />
-                    {option.swatch && <span class="swatch" data-swatch={option.value} aria-hidden="true">Aa</span>}
-                    {option.label}
-                </label>
-            ))}
+        <span class="set-label">
+            {item.label}
+            {item.help && <span class="set-help">{item.help}</span>}
+        </span>
+    );
+}
+
+function SwitchRow({ item, current, disabled }: ItemProps<SwitchItem>) {
+    const onChange = useCallback((event: Event) => {
+        set(item.key, (event.currentTarget as HTMLInputElement).checked);
+    }, [item.key]);
+    return (
+        <label class="set-row" aria-disabled={disabled || undefined}>
+            <ItemText item={item} />
+            <input type="checkbox" role="switch" class="switch" checked={current[item.key]} aria-checked={current[item.key]} disabled={disabled} onChange={onChange} />
+        </label>
+    );
+}
+
+function SliderRow({ item, current, disabled }: ItemProps<SliderItem>) {
+    const def: RangeDef = SCHEMA[item.key];
+    const onInput = useCallback((event: Event) => {
+        set(item.key, Number((event.currentTarget as HTMLInputElement).value));
+    }, [item.key]);
+    const value = current[item.key];
+    return (
+        <div class="set-row set-block" aria-disabled={disabled || undefined}>
+            <div class="set-line">
+                <ItemText item={item} />
+                <output class="set-value">{item.format(value)}</output>
+            </div>
+            <input
+                type="range"
+                class="slider"
+                min={def.min}
+                max={def.max}
+                step={def.step}
+                value={value}
+                disabled={disabled}
+                aria-label={item.label}
+                onInput={onInput}
+            />
+        </div>
+    );
+}
+
+function ChoiceRow({ item, current, disabled }: ItemProps<ChoiceItem>) {
+    const onChange = useCallback((event: Event) => {
+        set(item.key, (event.currentTarget as HTMLInputElement | HTMLSelectElement).value as Settings[typeof item.key]);
+    }, [item.key]);
+    const value = current[item.key];
+    const entries = Object.entries(item.options);
+    if (item.control === 'select') {
+        return (
+            <label class="set-row" aria-disabled={disabled || undefined}>
+                <ItemText item={item} />
+                <select class="set-select" value={value} disabled={disabled} onChange={onChange}>
+                    {entries.map(([option, label]) => (
+                        <option key={option} value={option}>
+                            {label}
+                        </option>
+                    ))}
+                </select>
+            </label>
+        );
+    }
+    return (
+        <fieldset class={item.control === 'segmented' ? 'set-row set-block set-segmented' : 'set-row set-block set-radios'} disabled={disabled}>
+            <legend class="set-legend">
+                <ItemText item={item} />
+            </legend>
+            <div class="set-options">
+                {entries.map(([option, label]) => (
+                    <label key={option} class="set-option">
+                        <input type="radio" name={item.key} value={option} checked={option === value} onChange={onChange} />
+                        {item.preview === 'theme' && <span class="swatch" data-swatch={option} aria-hidden="true">Aa</span>}
+                        <span class="set-option-text" data-font-preview={item.preview === 'font' ? option : undefined}>
+                            {label}
+                        </span>
+                    </label>
+                ))}
+            </div>
         </fieldset>
     );
 }
 
+function ItemRow({ item, current }: { item: Item; current: Settings }) {
+    const disabled = item.enabledIf ? !item.enabledIf(current) : false;
+    switch (item.control) {
+        case 'switch':
+            return <SwitchRow item={item} current={current} disabled={disabled} />;
+        case 'slider':
+            return <SliderRow item={item} current={current} disabled={disabled} />;
+        default:
+            return <ChoiceRow item={item} current={current} disabled={disabled} />;
+    }
+}
+
+const SCOPES: readonly KeyScope[] = ['thread', 'global'];
+const SCOPE_TITLES: Record<KeyScope, string> = { thread: 'In a thread', global: 'Anywhere' };
+
+function ShortcutsPage() {
+    return (
+        <>
+            {SCOPES.map((scope) => (
+                <section key={scope} class="set-section">
+                    <h3>{SCOPE_TITLES[scope]}</h3>
+                    <dl class="set-group">
+                        {SHORTCUTS.filter((shortcut) => shortcut.scope === scope).map((shortcut) => (
+                            <div key={shortcut.label} class="set-row set-shortcut">
+                                <dt>
+                                    {shortcut.keys.map((key) => (
+                                        <kbd key={key}>{key}</kbd>
+                                    ))}
+                                </dt>
+                                <dd>{shortcut.label}</dd>
+                            </div>
+                        ))}
+                    </dl>
+                </section>
+            ))}
+        </>
+    );
+}
+
+function PageBody({ page, current }: { page: Page; current: Settings }) {
+    if (page.id === 'shortcuts') {
+        return <ShortcutsPage />;
+    }
+    return (
+        <>
+            {page.sections.map((section) => {
+                const items = section.items.filter((item) => !item.when || item.when());
+                return items.length === 0
+                    ? null
+                    : (
+                        <section key={section.title} class="set-section">
+                            <h3>{section.title}</h3>
+                            <div class="set-group">
+                                {items.map((item) => (
+                                    <ItemRow key={item.key} item={item} current={current} />
+                                ))}
+                            </div>
+                        </section>
+                    );
+            })}
+        </>
+    );
+}
+
+/** Settings: a list of pages; each page shows its settings in sections. Back returns to the list. */
 export function SettingsDialog() {
-    const open = settingsOpen.value;
-    const dialog = useModalDialog(open, close);
+    const [pageId, setPageId] = useState<PageId>();
     const current = settings.value;
+    const page = PAGES.find((candidate) => candidate.id === pageId);
+
+    const openPage = useCallback((event: Event) => {
+        setPageId((event.currentTarget as HTMLElement).dataset['page'] as PageId);
+    }, []);
+    const back = useCallback(() => {
+        setPageId(undefined);
+    }, []);
 
     return (
-        <dialog ref={dialog} class="settings" aria-labelledby="settings-title" onClose={close}>
-            <div class="settings-body">
-                <header class="settings-head">
-                    <h2 id="settings-title">Settings</h2>
-                    <button type="button" class="icon-btn settings-close" aria-label="Close settings" onClick={close}>
-                        {CLOSE_ICON}
-                    </button>
-                </header>
-                <div class="settings-content">
-                    <Choice legend="Theme" name="theme" value={current.theme} options={THEME_OPTIONS} onChange={setTheme} />
-                    <Choice legend="Thumbnails" name="thumbnails" value={current.thumbnails} options={THUMBNAIL_OPTIONS} onChange={setThumbnails} />
-                    <Choice legend="Open comments in" name="comments-target" value={current.commentsTarget} options={COMMENTS_OPTIONS} onChange={setCommentsTarget} />
-                    <div class="laptop-only">
-                        <Choice legend="Content width (laptop)" name="width" value={current.width} options={WIDTH_OPTIONS} onChange={setWidth} />
-                    </div>
-                    <Choice legend="Reply indent" name="indent" value={current.indent} options={INDENT_OPTIONS} onChange={setIndent} />
-                    <section class="laptop-only">
-                        <h3>Keyboard shortcuts in a thread</h3>
-                        <dl class="shortcuts">
-                            {SHORTCUTS.map(([keys, action]) => (
-                                <div key={keys}>
-                                    <dt>{keys}</dt>
-                                    <dd>{action}</dd>
-                                </div>
-                            ))}
-                        </dl>
-                    </section>
-                </div>
-                <footer class="settings-foot">
-                    <button type="button" class="settings-done" onClick={close}>
-                        Done
-                    </button>
-                </footer>
-            </div>
-        </dialog>
+        <Sheet title={page?.title ?? 'Settings'} onClose={close} onBack={page ? back : undefined} footer={DONE} class="settings">
+            {page
+                ? <PageBody key={page.id} page={page} current={current} />
+                : (
+                    <nav class="set-group" aria-label="Settings pages">
+                        {PAGES.filter((candidate) => !candidate.when || candidate.when()).map((candidate) => (
+                            <button key={candidate.id} type="button" class="set-row set-nav" data-page={candidate.id} onClick={openPage}>
+                                <span class="set-label">{candidate.title}</span>
+                                {CHEVRON}
+                            </button>
+                        ))}
+                    </nav>
+                )}
+        </Sheet>
     );
 }

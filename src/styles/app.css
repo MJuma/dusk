@@ -164,18 +164,67 @@ html {
     text-size-adjust: 100%;
 }
 
+/*
+ * Text size: 15px on phones and 14px on wider screens, times the size slider in Settings. On
+ * iPhone/iPad, "System Text Size" instead follows iOS's text size setting: the body takes the
+ * system body size (17px at iOS's default) and the app scales from it, so it's the usual size
+ * at the default and grows or shrinks with the system.
+ */
+:root {
+    --text-base: 15px;
+    --text-ratio: calc(15 / 17);
+}
+
+@media (min-width: 720px) {
+    :root {
+        --text-base: 14px;
+        --text-ratio: calc(14 / 17);
+    }
+}
+
 body {
     margin: 0;
     background: var(--bg);
     color: var(--text);
-    font: 15px/1.45 var(--font);
+    font: calc(var(--text-base) * var(--text-scale, 1))/1.45 var(--font);
     -webkit-tap-highlight-color: transparent;
 }
 
-@media (min-width: 720px) {
-    body {
-        font-size: 14px;
-    }
+:root[data-text-size='system'] body {
+    font: -apple-system-body;
+}
+
+:root[data-text-size='system'] #app {
+    font-family: var(--font);
+    font-size: calc(1em * var(--text-ratio));
+    line-height: 1.45;
+}
+
+/*
+ * Fonts: a short list built into every iPhone and Mac (a web page can't list the installed
+ * fonts): Verdana is HN's own; Charter and Iowan Old Style are made for reading on screens.
+ */
+:root {
+    --font-verdana: Verdana, Geneva, 'DejaVu Sans', sans-serif;
+    --font-avenir: 'Avenir Next', Avenir, 'Segoe UI', system-ui, sans-serif;
+    --font-charter: Charter, 'Bitstream Charter', 'Sitka Text', Cambria, serif;
+    --font-iowan: 'Iowan Old Style', 'Palatino Linotype', Palatino, P052, serif;
+}
+
+:root[data-font='verdana'] {
+    --font: var(--font-verdana);
+}
+
+:root[data-font='avenir'] {
+    --font: var(--font-avenir);
+}
+
+:root[data-font='charter'] {
+    --font: var(--font-charter);
+}
+
+:root[data-font='iowan'] {
+    --font: var(--font-iowan);
 }
 
 a {
@@ -216,6 +265,113 @@ svg {
     :root[data-width='narrow'] #app {
         max-width: 52rem;
     }
+}
+
+/*
+ * Split view (Settings › Appearance › Split View, wide screens): the list in a left column that
+ * scrolls on its own and keeps its place, and the open story beside it, scrolled by the page.
+ */
+/* Split view uses the whole width, whatever App Width is set to. */
+:root[data-width] #app:has(.split) {
+    width: auto;
+    max-width: none;
+}
+
+.split {
+    --split-list: clamp(20rem, 34vw, 30rem);
+    display: grid;
+    grid-template-columns: var(--split-list) minmax(0, 1fr);
+    align-items: start;
+}
+
+.split-list {
+    position: sticky;
+    top: var(--topbar-h);
+    height: calc(100dvh - var(--topbar-h));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-right: 1px solid var(--border);
+}
+
+.split-detail {
+    min-width: 0;
+}
+
+.split .thread-nav {
+    left: calc(var(--split-list) + (100vw - var(--split-list)) / 2);
+}
+
+.story-selected {
+    background: var(--surface);
+    box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/*
+ * The page below the top bar. In the installed app, swiping back slides it away to the right and
+ * uncovers a picture of the previous page beneath, like iOS (and Apollo); swiping forward slides
+ * the next page in over it from the right.
+ */
+.page {
+    position: relative;
+    z-index: 1;
+    min-height: calc(100dvh - var(--topbar-h));
+    background: var(--bg);
+}
+
+.page-swiping {
+    box-shadow: -10px 0 30px var(--shadow);
+}
+
+/* Fixed bars inside the sliding page would jump while it moves; they come back when it settles. */
+.page-swiping .thread-nav {
+    visibility: hidden;
+}
+
+@property --nav-dim {
+    syntax: '<number>';
+    inherits: true;
+    initial-value: 0;
+}
+
+.nav-layer {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    background: var(--bg);
+    pointer-events: none;
+}
+
+.nav-layer-under {
+    z-index: 0;
+}
+
+.nav-layer-over {
+    z-index: 2;
+    box-shadow: -10px 0 30px var(--shadow);
+}
+
+.nav-layer > .page {
+    position: absolute;
+    top: var(--snapshot-top, 0);
+    right: 0;
+    left: 0;
+    z-index: auto;
+    min-height: 0;
+    box-shadow: none;
+}
+
+/* The previous page darkens a little while it's covered. */
+.nav-layer-under::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgb(0 0 0 / var(--nav-dim, 0));
+}
+
+.nav-stuck {
+    position: absolute;
+    right: 0;
+    left: 0;
 }
 
 /* ── Top bar ─────────────────────────────────────────────── */
@@ -474,7 +630,7 @@ a.story-domain:hover {
     cursor: default;
 }
 
-/* "discuss" and "link + discuss" under each story: laptop only. */
+/* "discuss" and "link + discuss" under each story (Settings › Posts › Story buttons). */
 .story-actions a {
     color: var(--muted);
     text-decoration: none;
@@ -485,10 +641,25 @@ a.story-domain:hover {
     text-decoration: underline;
 }
 
-@media (max-width: 719px), (pointer: coarse) {
-    .story-actions {
-        display: none;
-    }
+:root[data-story-buttons='none'] .story-actions,
+:root[data-story-buttons='comments'] .story-link-discuss,
+:root[data-story-buttons='link'] .story-discuss {
+    display: none;
+}
+
+/* Settings › Appearance › Posts: rank, site and author can be hidden. */
+:root[data-rank='off'] .story-rank,
+:root[data-domain='off'] .story .story-domain,
+:root[data-author='off'] .story .story-author {
+    display: none;
+}
+
+:root[data-rank='off'] .story {
+    grid-template-columns: 1fr auto;
+}
+
+:root[data-rank='off'] .story-thumbs {
+    grid-template-columns: var(--thumb-w) 1fr auto;
 }
 
 .status {
@@ -672,8 +843,19 @@ a.story-domain:hover {
     cursor: pointer;
 }
 
+/* Each author's name has its own color (the same wherever they post); the OP's is orange. */
+:root {
+    --name-s: 62%;
+    --name-l: 74%;
+}
+
+:root[data-theme='light'] {
+    --name-s: 55%;
+    --name-l: 36%;
+}
+
 .c-author {
-    color: var(--title);
+    color: hsl(var(--name-h, 210) var(--name-s) var(--name-l));
     font-weight: 600;
     text-decoration: none;
 }
@@ -686,7 +868,7 @@ a.story-domain:hover {
     color: var(--title);
 }
 
-.c-op {
+.c-author.c-op {
     color: var(--accent);
 }
 
@@ -740,20 +922,24 @@ a.story-domain:hover {
     text-decoration: underline;
 }
 
-/* "•••" (phones) and the age sit at the right end of the header, as in Apollo. */
-.c-tail {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    margin-left: auto;
+/* The age follows the name, like HN's, and links to the comment itself. */
+.c-age {
+    color: var(--muted);
+    text-decoration: none;
 }
 
+.c-age:hover {
+    color: var(--title);
+    text-decoration: underline;
+}
+
+/* "•••" (phones) sits at the right end of the header, as in Apollo. */
 .c-more {
     display: grid;
     place-items: center;
     width: 2.25rem;
     height: 2rem;
-    margin: -0.25rem -0.2rem;
+    margin: -0.25rem -0.2rem -0.25rem auto;
     padding: 0;
     border: 0;
     border-radius: 8px;
@@ -801,6 +987,120 @@ a.story-domain:hover {
     background: var(--surface);
     font: 0.85em/1.4 var(--mono);
     white-space: pre;
+}
+
+/*
+ * Swipe gestures (Settings › Gestures). A swiped story or comment slides aside and uncovers a strip,
+ * in the space it left, naming the action it will run. The label stays put at the screen edge,
+ * mid-way down the row's visible part; the strip takes the action's color once the swipe is far
+ * enough to count.
+ */
+.stories,
+.comments {
+    overflow-x: clip;
+}
+
+.story {
+    position: relative;
+}
+
+[data-swipe]::after {
+    content: attr(data-swipe);
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: var(--swipe-dx, 0);
+    box-sizing: border-box;
+    display: flex;
+    align-items: flex-start;
+    padding: max(0px, calc(var(--swipe-y, 1rem) - 0.5rem)) 0.75rem 0;
+    overflow: hidden;
+    background: var(--raised);
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-weight: 700;
+    line-height: 1rem;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+.swipe-from-left::after {
+    right: 100%;
+    justify-content: flex-start;
+}
+
+.swipe-from-right::after {
+    left: 100%;
+    justify-content: flex-end;
+}
+
+[data-swipe-action] {
+    --swipe-color: var(--accent);
+}
+
+[data-swipe-action='save'] {
+    --swipe-color: var(--rail-3);
+}
+
+[data-swipe-action='reply'] {
+    --swipe-color: var(--rail-1);
+}
+
+[data-swipe-action='author'] {
+    --swipe-color: var(--rail-2);
+}
+
+[data-swipe-action='share'] {
+    --swipe-color: var(--rail-5);
+}
+
+[data-swipe-action='collapse'] {
+    --swipe-color: var(--rail-6);
+}
+
+[data-swipe-action='collapse-top'] {
+    --swipe-color: var(--rail-4);
+}
+
+.swipe-armed[data-swipe]::after {
+    background: var(--swipe-color);
+    color: var(--on-accent);
+}
+
+/* Back/forward swipe in the installed app: an arrow that slides in from the edge and fills when armed. */
+.swipe-nav {
+    position: fixed;
+    top: calc(var(--nav-y, 50vh) - 22px);
+    left: 0;
+    z-index: 30;
+    display: none;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    background: var(--raised);
+    box-shadow: 0 4px 16px var(--shadow);
+    color: var(--muted);
+    opacity: var(--nav-progress, 0);
+    transform: translateX(calc(-44px + var(--nav-progress, 0) * 60px));
+    pointer-events: none;
+}
+
+.swipe-nav-shown {
+    display: grid;
+}
+
+.swipe-nav-forward {
+    right: 0;
+    left: auto;
+    transform: translateX(calc(44px - var(--nav-progress, 0) * 60px)) scaleX(-1);
+}
+
+.swipe-nav-armed {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--on-accent);
 }
 
 /* ── Thread navigation bar ───────────────────────────────── */
@@ -859,52 +1159,103 @@ a.story-domain:hover {
     filter: brightness(1.1);
 }
 
-/* ── Settings ────────────────────────────────────────────── */
+/* ── Sheets (modal dialogs) ──────────────────────────────── */
 
-.settings {
-    width: min(30rem, calc(100vw - 1.5rem));
+/*
+ * A sheet is a modal <dialog> stretched over the whole screen and left transparent, with the
+ * visible panel inside. A tap outside the panel lands on the dialog element itself (iOS doesn't
+ * deliver taps on ::backdrop), which closes it. Only the panel's middle scrolls, and the page
+ * behind doesn't scroll while the sheet is open.
+ */
+.sheet {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    max-width: none;
     max-height: none;
-    /* The body fills the dialog, so a click on the dialog element itself is a backdrop click. */
-    padding: 0;
+    margin: 0;
+    padding: calc(0.75rem + env(safe-area-inset-top)) 0.75rem calc(0.75rem + env(safe-area-inset-bottom));
+    border: 0;
+    background: none;
+    color: var(--text);
+    overscroll-behavior: contain;
+    touch-action: none;
+}
+
+.sheet[open] {
+    display: grid;
+    grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+    place-items: center;
+}
+
+.sheet-bottom[open] {
+    align-items: end;
+}
+
+.sheet::backdrop {
+    background: rgb(0 0 0 / 0.5);
+}
+
+/* While a sheet is open, the page behind it doesn't scroll (mouse wheel or touch). */
+:root:has(dialog.sheet[open]) {
+    overflow: hidden;
+}
+
+.sheet-panel {
+    display: flex;
+    flex-direction: column;
+    width: min(30rem, 100%);
+    max-height: 100%;
     overflow: hidden;
     border: 1px solid var(--border);
     border-radius: 12px;
     background: var(--raised);
-    color: var(--text);
+    box-shadow: 0 12px 40px var(--shadow);
+    outline: none;
 }
 
-.settings::backdrop {
-    background: rgb(0 0 0 / 0.5);
+.sheet-bottom .sheet-panel {
+    width: min(26rem, 100%);
 }
 
-/*
- * Header (with the close button) and footer stay put; only the middle scrolls. The height keeps
- * clear of the notch/status bar and home indicator, which the installed iPhone app draws under.
- */
-.settings-body {
-    display: flex;
-    flex-direction: column;
-    max-height: calc(100dvh - 2 * max(env(safe-area-inset-top), env(safe-area-inset-bottom)) - 1.5rem);
-}
-
-.settings-head {
+.sheet-head {
     display: flex;
     flex: none;
     align-items: center;
-    justify-content: space-between;
+    gap: 0.25rem;
     padding: 0.6rem 1.25rem 0.5rem;
     border-bottom: 1px solid var(--border);
 }
 
-.settings-content {
+.sheet-head h2 {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    font-size: 1.1em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sheet-close {
+    margin-right: -0.5rem;
+}
+
+.sheet-content {
     flex: 1 1 auto;
     min-height: 0;
     padding: 0.75rem 1.25rem 1rem;
     overflow-y: auto;
     overscroll-behavior: contain;
+    touch-action: pan-y;
 }
 
-.settings-foot {
+.sheet-content.sheet-flush {
+    padding: 0;
+}
+
+.sheet-foot {
     display: flex;
     flex: none;
     justify-content: flex-end;
@@ -919,44 +1270,270 @@ a.story-domain:hover {
     }
 }
 
-.settings-close {
-    margin-right: -0.5rem;
-}
-
-.settings h2 {
-    margin: 0;
-    font-size: 1.1em;
-}
-
-.settings h3 {
+.sheet h3 {
     margin: 1rem 0 0.4rem;
     font-size: 0.9em;
     color: var(--muted);
 }
 
-.choice {
-    margin: 0 0 0.75rem;
-    padding: 0;
-    border: 0;
+/* ── Settings ────────────────────────────────────────────── */
+
+/* Pages of grouped rows, like iOS Settings. */
+.set-section {
+    margin: 0 0 1.1rem;
 }
 
-.choice legend {
-    margin-bottom: 0.3rem;
-    padding: 0;
-    color: var(--muted);
-    font-size: 0.9em;
+.set-section:last-child {
+    margin-bottom: 0;
 }
 
-.choice-option {
+.sheet .set-section h3 {
+    margin: 0 0 0.35rem 0.85rem;
+    font-size: 0.78em;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.set-group {
+    margin: 0;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+}
+
+.set-row {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.2rem 0;
+    justify-content: space-between;
+    gap: 0.75rem;
+    width: 100%;
+    min-height: 2.9rem;
+    margin: 0;
+    padding: 0.5rem 0.85rem;
+    border: 0;
+    border-top: 1px solid var(--border);
+    background: none;
+    color: var(--title);
+    font: inherit;
+    text-align: left;
+}
+
+.set-row:first-child {
+    border-top: 0;
+}
+
+label.set-row,
+.set-nav {
     cursor: pointer;
 }
 
-.choice-option input {
+.set-nav:hover,
+.set-nav:focus-visible {
+    background: var(--raised);
+}
+
+.set-chevron {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    color: var(--muted);
+}
+
+.set-block {
+    display: block;
+}
+
+.set-row[aria-disabled='true'],
+.set-row:disabled {
+    opacity: 0.45;
+}
+
+.set-label {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.set-help {
+    display: block;
+    margin-top: 0.1rem;
+    color: var(--muted);
+    font-size: 0.82em;
+}
+
+.set-line {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.set-value {
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+}
+
+/* A fieldset's legend can't sit inside its flex/grid layout, so it floats to join the flow. */
+.set-legend {
+    float: left;
+    width: 100%;
+    margin-bottom: 0.45rem;
+    padding: 0;
+}
+
+.set-options {
+    clear: both;
+}
+
+.set-radios .set-option {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.3rem 0;
+    cursor: pointer;
+}
+
+.set-radios input {
     accent-color: var(--accent);
+}
+
+/* Segmented control: radios drawn as one row of buttons. */
+.set-segmented .set-options {
+    display: flex;
+    padding: 2px;
+    border-radius: 8px;
+    background: var(--bg);
+}
+
+.set-segmented .set-option {
+    position: relative;
+    display: grid;
+    flex: 1 1 0;
+    place-items: center;
+    min-height: 2rem;
+    padding: 0.2rem 0.35rem;
+    border-radius: 6px;
+    color: var(--muted);
+    font-size: 0.88em;
+    text-align: center;
+    cursor: pointer;
+}
+
+.set-segmented input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.set-segmented .set-option:has(input:checked) {
+    background: var(--raised);
+    box-shadow: 0 1px 3px var(--shadow);
+    color: var(--title);
+    font-weight: 600;
+}
+
+.set-segmented .set-option:has(input:focus-visible) {
+    outline: 2px solid var(--accent);
+}
+
+.set-select {
+    max-width: 55%;
+    padding: 0.3rem 0.4rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--title);
+    font: inherit;
+}
+
+/* iOS-style switch. */
+.switch {
+    flex: none;
+    position: relative;
+    width: 2.75rem;
+    height: 1.6rem;
+    margin: 0;
+    border-radius: 999px;
+    background: var(--border);
+    appearance: none;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.switch::after {
+    content: '';
+    position: absolute;
+    top: 0.15rem;
+    left: 0.15rem;
+    width: 1.3rem;
+    height: 1.3rem;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.3);
+    transition: transform 0.15s;
+}
+
+.switch:checked {
+    background: var(--accent);
+}
+
+.switch:checked::after {
+    transform: translateX(1.15rem);
+}
+
+.slider {
+    width: 100%;
+    margin: 0.5rem 0 0.15rem;
+    accent-color: var(--accent);
+}
+
+.set-shortcut dt {
+    display: flex;
+    flex: none;
+    gap: 0.25rem;
+    min-width: 4.5rem;
+}
+
+.set-shortcut dd {
+    flex: 1 1 auto;
+    margin: 0;
+}
+
+kbd {
+    min-width: 1.6em;
+    padding: 0.05em 0.4em;
+    border: 1px solid var(--border);
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    background: var(--bg);
+    font: 0.9em var(--mono);
+    text-align: center;
+}
+
+/* Each font option is shown in its own face. */
+[data-font-preview='system'] {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+}
+
+[data-font-preview='verdana'] {
+    font-family: var(--font-verdana);
+}
+
+[data-font-preview='avenir'] {
+    font-family: var(--font-avenir);
+}
+
+[data-font-preview='charter'] {
+    font-family: var(--font-charter);
+}
+
+[data-font-preview='iowan'] {
+    font-family: var(--font-iowan);
+}
+
+.sheet-back {
+    margin-left: -0.5rem;
 }
 
 .swatch {
@@ -1003,27 +1580,6 @@ a.story-domain:hover {
     background: #f6f6ef;
     color: #111111;
     box-shadow: inset 0 -3px 0 #e05a00;
-}
-
-.shortcuts {
-    display: grid;
-    gap: 0.2rem;
-    margin: 0;
-    font-size: 0.9em;
-}
-
-.shortcuts div {
-    display: grid;
-    grid-template-columns: 4.5rem 1fr;
-}
-
-.shortcuts dt {
-    font-family: var(--mono);
-    color: var(--title);
-}
-
-.shortcuts dd {
-    margin: 0;
 }
 
 .settings-done {
@@ -1181,18 +1737,6 @@ a.story-domain:hover {
     margin: 1rem 0 0;
     color: var(--muted);
     font-size: 0.8em;
-}
-
-/* A comment's actions (phones): a sheet at the bottom of the screen, like an iOS action sheet. */
-.comment-menu {
-    width: min(26rem, calc(100vw - 1.5rem));
-    margin: auto auto calc(0.75rem + env(safe-area-inset-bottom));
-}
-
-.comment-menu h2 {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
 .menu-list {

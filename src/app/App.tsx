@@ -1,15 +1,18 @@
+import { Fragment } from 'preact';
 import { useLayoutEffect } from 'preact/hooks';
 
 import { FeedView } from '../feed/FeedView';
 import { saveSheet } from '../offline/saved';
 import { ThreadView } from '../thread/ThreadView';
 import { SAVED_ICON } from './icons';
-import { InstallNudge } from './InstallNudge';
+import { wantsInstallNudge } from './install';
 import { lazyComponent } from './lazy';
+import { listRoute, splitActive } from './layout';
 import { online } from './online';
 import { refresh } from './refresh';
-import { COMMENTS_HREF, feedHref, pastHref, route, routeKey, SAVED_HREF, savedScroll, searchHref } from './router';
+import { COMMENTS_HREF, feedHref, pastHref, route, routeKey, routePane, SAVED_HREF, savedScroll, searchHref } from './router';
 import type { Route } from './router';
+import { useKeyScope } from './keymap';
 import { settingsOpen } from './settings';
 import { dismissToast, toast } from './toast';
 
@@ -24,6 +27,7 @@ const SavedView = lazyComponent(() => import('../offline/SavedView').then((m) =>
 const ArticleView = lazyComponent(() => import('../offline/ArticleView').then((m) => m.ArticleView), LOADING);
 const SettingsDialog = lazyComponent(() => import('./SettingsDialog').then((m) => m.SettingsDialog));
 const SaveSheet = lazyComponent(() => import('../offline/SaveSheet').then((m) => m.SaveSheet));
+const InstallNudge = lazyComponent(() => import('./InstallNudge').then((m) => m.InstallNudge));
 
 interface Tab {
     key: string;
@@ -74,22 +78,15 @@ const openSettings = (): void => {
     settingsOpen.value = true;
 };
 
-window.addEventListener('keydown', (event) => {
-    const typing = event.target instanceof HTMLElement && ['INPUT', 'SELECT', 'TEXTAREA'].includes(event.target.tagName);
-    if (typing || event.metaKey || event.ctrlKey || event.altKey || settingsOpen.value) {
-        return;
-    }
-    if (event.key === '?') {
+const onGlobalKey = (command: string): void => {
+    if (command === 'settings') {
         openSettings();
-    } else if (event.key === '/') {
-        event.preventDefault();
-        if (route.value.name === 'search') {
-            document.querySelector<HTMLInputElement>('.search-input')?.focus();
-        } else {
-            location.hash = searchHref();
-        }
+    } else if (route.value.name === 'search') {
+        document.querySelector<HTMLInputElement>('.search-input')?.focus();
+    } else {
+        location.hash = searchHref();
     }
-});
+};
 
 const RESTORE_TIMEOUT_MS = 5000;
 
@@ -151,11 +148,48 @@ function ToastView() {
     );
 }
 
+/** A page's view, keyed so each page (and each visit to a different one) gets its own state. */
+function renderPage(page: Route) {
+    const key = routeKey(page);
+    switch (page.name) {
+        case 'item':
+            // Keyed by story only: following a comment's permalink within the thread just jumps to it.
+            return <ThreadView key={`item:${page.id}`} id={page.id} focus={page.focus} />;
+        case 'user':
+            return <UserView key={key} id={page.id} tab={page.tab} />;
+        case 'feed':
+            return (
+                <Fragment key={key}>
+                    {wantsInstallNudge() && <InstallNudge />}
+                    <FeedView kind={page.kind} page={page.page} />
+                </Fragment>
+            );
+        case 'saved':
+            return <SavedView key={key} />;
+        case 'read':
+            return <ArticleView key={key} id={page.id} />;
+        case 'search':
+            return <SearchView key={key} query={page.query} type={page.type} sort={page.sort} />;
+        case 'past':
+            return <PastView key={key} day={page.day} />;
+        case 'comments':
+            return <NewCommentsView key={key} />;
+        case 'from':
+            return <FromView key={key} site={page.site} />;
+    }
+}
+
 export function App() {
     const current = route.value;
     const key = routeKey(current);
+    useKeyScope('global', onGlobalKey);
 
-    useLayoutEffect(() => restoreScroll(savedScroll(key)), [key]);
+    const split = splitActive.value;
+    const pane = routePane(current);
+    // In split view a list scrolls in its own pane; the page itself scrolls the story beside it.
+    // Restore only when the view changes: a permalink within the open thread scrolls to its comment itself.
+    const viewKey = current.name === 'item' ? `item:${current.id}` : key;
+    useLayoutEffect(() => restoreScroll(splitActive.peek() && routePane(route.peek()) === 'list' ? 0 : savedScroll(routeKey(route.peek()))), [viewKey]);
 
     const active = activeTab(current);
     return (
@@ -184,21 +218,24 @@ export function App() {
                     {SETTINGS_ICON}
                 </button>
             </header>
-            {!online.value && (
-                <p class="offline-banner">
-                    Offline · saved stories still open. <a href={SAVED_HREF}>Saved</a>
-                </p>
-            )}
-            {current.name === 'item' && <ThreadView key={key} id={current.id} focus={current.focus} />}
-            {current.name === 'user' && <UserView key={key} id={current.id} tab={current.tab} />}
-            {current.name === 'feed' && <InstallNudge />}
-            {current.name === 'feed' && <FeedView key={key} kind={current.kind} page={current.page} />}
-            {current.name === 'saved' && <SavedView key={key} />}
-            {current.name === 'read' && <ArticleView key={key} id={current.id} />}
-            {current.name === 'search' && <SearchView key={key} query={current.query} type={current.type} sort={current.sort} />}
-            {current.name === 'past' && <PastView key={key} day={current.day} />}
-            {current.name === 'comments' && <NewCommentsView key={key} />}
-            {current.name === 'from' && <FromView key={key} site={current.site} />}
+            {/* Everything below the top bar; the back/forward swipe slides this. */}
+            <div class="page">
+                {!online.value && (
+                    <p class="offline-banner">
+                        Offline · saved stories still open. <a href={SAVED_HREF}>Saved</a>
+                    </p>
+                )}
+                {split
+                    ? (
+                        <div class="split">
+                            <div class="split-list">{renderPage(pane === 'list' ? current : listRoute.value)}</div>
+                            <div class="split-detail">
+                                {pane === 'detail' ? renderPage(current) : <p class="status">Choose a story to read it here.</p>}
+                            </div>
+                        </div>
+                    )
+                    : renderPage(current)}
+            </div>
             {settingsOpen.value && <SettingsDialog />}
             {saveSheet.value && <SaveSheet />}
             <ToastView />

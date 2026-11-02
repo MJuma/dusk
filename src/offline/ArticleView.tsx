@@ -1,37 +1,87 @@
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 
 import { itemHref } from '../app/router';
 import { setPageTitle } from '../app/title';
-import { domainOf } from '../data/hn';
+import { domainOf, firebaseItemUrl, toStory } from '../data/hn';
+import { fetchJson, source } from '../data/source';
+import type { FirebaseItem, Story } from '../data/types';
+import { shownStories } from '../gestures/rows';
 import { sanitizeArticleHtml } from '../lib/sanitize';
 import { ago } from '../lib/time';
-import { savedArticle, savedItems } from './saved';
+import { fetchReadable } from './article';
+import { savedArticle, savedItems, saveSheet } from './saved';
 import type { SavedArticle } from './store';
+
+/** An article in reader view: a saved copy, or read live (`savedAt` undefined). */
+type ReaderArticle = Omit<SavedArticle, 'savedAt'> & { savedAt?: number };
+
+/** Articles read live this session, so going back and forth doesn't refetch them. */
+const liveArticles = new Map<number, Promise<ReaderArticle>>();
+
+async function findStory(id: number): Promise<Story | undefined> {
+    const known = savedItems.peek().get(id)?.story ?? shownStories.get(id) ?? source.cachedThread(id)?.story;
+    return known ?? toStory(await fetchJson<FirebaseItem>(firebaseItemUrl(id)));
+}
+
+function readLive(id: number): Promise<ReaderArticle> {
+    let pending = liveArticles.get(id);
+    if (!pending) {
+        pending = findStory(id).then(async (story) => {
+            if (!story?.url) {
+                throw new Error('This story has no article to read.');
+            }
+            const { title, markdown } = await fetchReadable(story.url);
+            return { id, url: story.url, title: story.title || title, markdown };
+        });
+        pending.catch(() => {
+            liveArticles.delete(id);
+        });
+        liveArticles.set(id, pending);
+    }
+    return pending;
+}
 
 interface ArticleViewProps {
     id: number;
 }
 
-/** A saved article in reader view, readable without a connection. */
+/**
+ * An article in reader view: the saved copy when there is one (readable offline), otherwise its
+ * text fetched live through the reader service ("Open Links In: Reader").
+ */
 export function ArticleView({ id }: ArticleViewProps) {
     const record = savedItems.value.get(id);
-    const [article, setArticle] = useState<SavedArticle | null>();
+    const [article, setArticle] = useState<ReaderArticle | null>();
+    const [error, setError] = useState<string>();
     const [body, setBody] = useState<{ __html: string }>();
     const bodyRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         let active = true;
         savedArticle(id)
+            .then((saved) => saved ?? (navigator.onLine ? readLive(id) : null))
             .then((loaded) => {
                 if (active) {
-                    setArticle(loaded ?? null);
+                    setArticle(loaded);
                 }
             })
-            .catch(() => undefined);
+            .catch((reason: unknown) => {
+                if (active) {
+                    setError(reason instanceof Error ? reason.message : 'The reader service failed.');
+                    setArticle(null);
+                }
+            });
         return () => {
             active = false;
         };
     }, [id]);
+
+    const openSave = useCallback(() => {
+        const story = record?.story ?? shownStories.get(id) ?? source.cachedThread(id)?.story;
+        if (story) {
+            saveSheet.value = story;
+        }
+    }, [id, record]);
 
     const title = record?.story.title || article?.title;
     useEffect(() => {
@@ -77,15 +127,16 @@ export function ArticleView({ id }: ArticleViewProps) {
         };
     }, [body]);
 
+    const originalUrl = record?.story.url ?? shownStories.get(id)?.url ?? source.cachedThread(id)?.story.url;
     if (article === undefined) {
-        return <main class="status">Loading…</main>;
+        return <main class="status">Loading reader view…</main>;
     }
     if (article === null) {
         return (
             <main class="status">
-                This article isn't saved for offline reading.{' '}
-                {record?.story.url && (
-                    <a href={record.story.url} target="_blank" rel="noopener noreferrer">
+                {error ?? "This article isn't saved for offline reading."}{' '}
+                {originalUrl && (
+                    <a href={originalUrl} target="_blank" rel="noopener noreferrer">
                         Open the original
                     </a>
                 )}
@@ -99,12 +150,20 @@ export function ArticleView({ id }: ArticleViewProps) {
                 <h1 class="thread-title">{record?.story.title || article.title}</h1>
                 <div class="story-meta">
                     {domain && <span class="story-domain">{domain}</span>}
-                    saved {ago(article.savedAt)} ·{' '}
+                    {article.savedAt === undefined ? 'reader view' : `saved ${ago(article.savedAt)}`} ·{' '}
                     <a href={article.url} target="_blank" rel="noopener noreferrer">
                         Open original
                     </a>
                     {' · '}
                     <a href={itemHref(id)}>Comments</a>
+                    {article.savedAt === undefined && (
+                        <>
+                            {' · '}
+                            <button type="button" class="save-btn" onClick={openSave}>
+                                save for offline
+                            </button>
+                        </>
+                    )}
                 </div>
             </header>
             {body ? <div ref={bodyRef} class="article-body" dangerouslySetInnerHTML={body} /> : <p class="status">Loading…</p>}

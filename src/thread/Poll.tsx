@@ -1,4 +1,4 @@
-import { memo } from 'preact/compat';
+import { memo } from '../lib/memo';
 import { useMemo } from 'preact/hooks';
 
 import type { PollOption } from '../data/types';

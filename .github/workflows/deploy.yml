@@ -29,6 +29,8 @@ jobs:
       - run: pnpm test
       # Pages serves the site from /<repo>/.
       - run: pnpm build --base "/${{ github.event.repository.name }}/"
+      # First-paint JavaScript must stay under 30 kB gzipped.
+      - run: pnpm size
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

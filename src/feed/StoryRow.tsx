@@ -1,8 +1,9 @@
-import { memo } from 'preact/compat';
-import { useCallback } from 'preact/hooks';
+import { memo } from '../lib/memo';
+import { useCallback, useEffect } from 'preact/hooks';
 
 import { online } from '../app/online';
-import { fromHref, itemHref, readHref, userHref } from '../app/router';
+import { splitActive } from '../app/layout';
+import { fromHref, itemHref, readHref, route, userHref } from '../app/router';
 import { commentsInNewTab, settings } from '../app/settings';
 import { showToast } from '../app/toast';
 import { recordLinkOpen, visits } from '../app/visits';
@@ -10,6 +11,7 @@ import { source } from '../data/source';
 import type { Story } from '../data/types';
 import { timeAgo } from '../lib/time';
 import { saveProgress, savedItems, saveSheet } from '../offline/saved';
+import { shownStories } from '../gestures/rows';
 import { newCommentEstimate } from '../thread/newComments';
 import { Thumbnail } from './Thumbnail';
 
@@ -20,8 +22,12 @@ interface StoryRowProps {
 
 export const StoryRow = memo(function StoryRow({ story, rank }: StoryRowProps) {
     const visit = visits.value.get(story.id);
-    const { thumbnails } = settings.value;
-    const newTab = commentsInNewTab(settings.value);
+    const { thumbnails, openLinks } = settings.value;
+    const split = splitActive.value;
+    const newTab = commentsInNewTab(settings.value, split);
+    const open = route.value;
+    // In split view, the story open beside the list is highlighted.
+    const selected = split && (open.name === 'item' || open.name === 'read') && open.id === story.id;
     const external = story.url !== null;
     const commentsRead = visit?.commentsAt !== undefined;
     // Text posts have no separate link: reading the comments is reading the story.
@@ -29,12 +35,21 @@ export const StoryRow = memo(function StoryRow({ story, rank }: StoryRowProps) {
     const fresh = commentsRead ? newCommentEstimate(story.descendants, visit) : 0;
     const saved = savedItems.value.get(story.id);
     const saving = (saveProgress.value.get(story.id)?.saving.size ?? 0) > 0;
-    // Offline, a saved article opens in the reader instead of the (unreachable) original.
-    const readSaved = !online.value && saved?.article !== undefined;
+    // Links open in Dusk's reader view when chosen in Settings, and offline when the article is saved
+    // (the original is unreachable then).
+    const readSaved = external && (openLinks === 'reader' || (!online.value && saved?.article !== undefined));
     let linkHref = story.url ?? itemHref(story.id);
     if (readSaved) {
         linkHref = readHref(story.id);
     }
+
+    // Swipe gestures look the row's story up by id.
+    useEffect(() => {
+        shownStories.set(story.id, story);
+        return () => {
+            shownStories.delete(story.id);
+        };
+    }, [story]);
 
     const openLink = useCallback((): void => {
         recordLinkOpen(story.id);
@@ -88,8 +103,11 @@ export const StoryRow = memo(function StoryRow({ story, rank }: StoryRowProps) {
     if (read) {
         classes += ' story-read';
     }
+    if (selected) {
+        classes += ' story-selected';
+    }
     return (
-        <li class={classes}>
+        <li class={classes} data-story={story.id} aria-current={selected ? 'page' : undefined}>
             <span class="story-rank">{rank}</span>
             {thumbnails !== 'off' && (
                 <Thumbnail
@@ -118,27 +136,32 @@ export const StoryRow = memo(function StoryRow({ story, rank }: StoryRowProps) {
                     </a>
                 )}
                 <div class="story-meta">
-                    {story.score} pts ·{' '}
-                    <a class="story-by" href={userHref(story.by)} target={commentsTarget} rel={commentsRel} onPointerDown={prefetchUser} onMouseEnter={prefetchUser}>
-                        {story.by}
-                    </a>
+                    {story.score} pts
+                    <span class="story-author">
+                        {' · '}
+                        <a class="story-by" href={userHref(story.by)} target={commentsTarget} rel={commentsRel} onPointerDown={prefetchUser} onMouseEnter={prefetchUser}>
+                            {story.by}
+                        </a>
+                    </span>
                     {' '}· {timeAgo(story.time)} ·{' '}
                     <button type="button" class={saved ? 'save-btn save-btn-saved' : 'save-btn'} onClick={openSave}>
                         {saving ? 'saving…' : saved ? 'saved' : 'save'}
                     </button>
                     {story.type !== 'job' && (
                         <span class="story-actions">
-                            {' · '}
-                            <a href={itemHref(story.id)} target={commentsTarget} rel={commentsRel} onPointerDown={prefetch}>
-                                discuss
-                            </a>
+                            <span class="story-discuss">
+                                {' · '}
+                                <a href={itemHref(story.id)} target={commentsTarget} rel={commentsRel} onPointerDown={prefetch}>
+                                    discuss
+                                </a>
+                            </span>
                             {external && (
-                                <>
+                                <span class="story-link-discuss">
                                     {' · '}
                                     <a href={story.url ?? undefined} target="_blank" rel="noopener noreferrer" onClick={openBoth} onAuxClick={openLink}>
                                         link + discuss
                                     </a>
-                                </>
+                                </span>
                             )}
                         </span>
                     )}

@@ -44,3 +44,28 @@ describe('router', () => {
         expect(routeKey(parseHash('#/item/1/2'))).not.toBe(routeKey(parseHash('#/item/1')));
     });
 });
+
+function hashChanged(): Promise<void> {
+    return new Promise((resolve) => {
+        window.addEventListener('hashchange', () => {
+            resolve();
+        }, { once: true });
+    });
+}
+
+describe('history tracking', () => {
+    it('numbers new pages so Back knows it stays in Dusk, and replacing a page keeps its place', async () => {
+        const { canGoBack, replaceRoute, route } = await import('./router');
+
+        expect(canGoBack.value).toBe(false);
+        const changed = hashChanged();
+        location.hash = '#/item/1';
+        await changed;
+        expect(canGoBack.value).toBe(true);
+        expect((history.state as { idx: number }).idx).toBe(1);
+
+        replaceRoute('#/item/1/2');
+        expect(route.value).toEqual({ name: 'item', id: 1, focus: 2 });
+        expect((history.state as { idx: number }).idx).toBe(1);
+    });
+});

@@ -14,6 +14,7 @@
         "preview": "vite preview",
         "lint": "oxlint -c oxlintrc.json --tsconfig tsconfig.json --type-aware src/ scripts/",
         "test": "vitest run",
+        "size": "node scripts/size.mjs",
         "fixtures": "node scripts/capture-fixture.mjs"
     },
     "dependencies": {

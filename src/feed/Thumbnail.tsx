@@ -1,4 +1,4 @@
-import { memo } from 'preact/compat';
+import { memo } from '../lib/memo';
 import { useCallback, useState } from 'preact/hooks';
 
 import type { Thumbnails } from '../app/settings';
