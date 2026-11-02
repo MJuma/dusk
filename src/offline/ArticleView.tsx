@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 
 import { itemHref } from '../app/router';
+import { setPageTitle } from '../app/title';
 import { domainOf } from '../data/hn';
 import { sanitizeArticleHtml } from '../lib/sanitize';
 import { ago } from '../lib/time';
@@ -31,6 +32,11 @@ export function ArticleView({ id }: ArticleViewProps) {
             active = false;
         };
     }, [id]);
+
+    const title = record?.story.title || article?.title;
+    useEffect(() => {
+        setPageTitle(title);
+    }, [title]);
 
     useEffect(() => {
         if (!article) {

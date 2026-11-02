@@ -4,6 +4,7 @@ import { online } from '../app/online';
 import { refreshTick } from '../app/refresh';
 import { fromHref, itemHref, readHref, userHref } from '../app/router';
 import { settingsOpen } from '../app/settings';
+import { setPageTitle } from '../app/title';
 import { getVisit, markSeen, recordThreadLoad } from '../app/visits';
 import type { Visit } from '../app/visits';
 import { hnItemUrl } from '../data/hn';
@@ -126,6 +127,11 @@ export function ThreadView({ id, focus }: ThreadViewProps) {
     }, [id, tick]);
 
     const hasComments = (thread?.comments.length ?? 0) > 0;
+    const storyTitle = thread?.story.title;
+    useEffect(() => {
+        setPageTitle(storyTitle);
+    }, [storyTitle]);
+
     useLayoutEffect(() => {
         if (!hasComments) {
             return undefined;

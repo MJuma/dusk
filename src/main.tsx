@@ -2,9 +2,11 @@ import { render } from 'preact';
 import { registerSW } from 'virtual:pwa-register';
 
 import { App } from './app/App';
+import { syncDocumentTitle } from './app/title';
 import { showToast } from './app/toast';
 import './styles/app.css';
 
+syncDocumentTitle();
 render(<App />, document.getElementById('app') as HTMLElement);
 
 const UPDATE_CHECK_MS = 30 * 60 * 1000;
