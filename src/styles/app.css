@@ -18,9 +18,6 @@
     --link-visited: #b39ddb;
     --focus-tint: rgb(140 196 255 / 0.12);
     --shadow: rgb(0 0 0 / 0.35);
-    /* Comment cards take their level's rail color at these strengths, alternating between siblings. */
-    --tint-a: 4%;
-    --tint-b: 7%;
     --rail-0: #ff8a3d;
     --rail-1: #4fb3d9;
     --rail-2: #a78bfa;
@@ -30,7 +27,7 @@
     --rail-6: #5c9cf5;
     --rail-7: #4dd0b5;
     --indent: 14px;
-    --rail: 2px;
+    --rail: 3px;
     /* Space between a comment's own rail and its text. */
     --rail-gap: 10px;
     --gutter: 0.75rem;
@@ -87,8 +84,6 @@
     --muted: #7d838d;
     --title: #eceef1;
     --read: #5f656d;
-    --tint-a: 5%;
-    --tint-b: 9%;
 }
 
 :root[data-theme='light'] {
@@ -107,8 +102,6 @@
     --link-visited: #6f42c1;
     --focus-tint: rgb(10 88 202 / 0.1);
     --shadow: rgb(0 0 0 / 0.12);
-    --tint-a: 5%;
-    --tint-b: 9%;
     --rail-0: #e8710a;
     --rail-1: #1b8fbf;
     --rail-2: #7c5cd6;
@@ -133,10 +126,9 @@
     --indent: 22px;
 }
 
-/* Fingers need bigger targets: thicker rails and more room between a comment's rail and its text. */
+/* Phones get a little more room between a reply's bar and its text. */
 @media (pointer: coarse) {
     :root {
-        --rail: 3px;
         --rail-gap: 12px;
     }
 }
@@ -584,55 +576,37 @@ a.story-domain:hover {
 }
 
 /*
- * Depth rails: one thin line per level from the top-level comment down to this one, colored by
- * level and cycling through 8 hues. A single repeating gradient draws them all, so stacked rows
- * form continuous colored lines down the page.
+ * Comments, like Apollo: each reply is indented by its depth and marked by one short bar in its
+ * level's color (cycling through 8 hues); top-level comments have none. The page stays flat, and
+ * a hairline above each comment, starting at its bar, separates it from the one before.
  */
 .c {
     position: relative;
-    --x: calc(var(--d) * var(--indent));
     --tone: var(--rail-0);
-    --tint: color-mix(in srgb, var(--tone) var(--tint-a), transparent);
-    padding: 0.35rem var(--gutter) 0.35rem calc(var(--gutter) + var(--x) + var(--rail-gap));
-    background-image: repeating-linear-gradient(
-        to right,
-        var(--rail-0) 0 var(--rail),
-        transparent var(--rail) calc(1 * var(--indent)),
-        var(--rail-1) calc(1 * var(--indent)) calc(1 * var(--indent) + var(--rail)),
-        transparent calc(1 * var(--indent) + var(--rail)) calc(2 * var(--indent)),
-        var(--rail-2) calc(2 * var(--indent)) calc(2 * var(--indent) + var(--rail)),
-        transparent calc(2 * var(--indent) + var(--rail)) calc(3 * var(--indent)),
-        var(--rail-3) calc(3 * var(--indent)) calc(3 * var(--indent) + var(--rail)),
-        transparent calc(3 * var(--indent) + var(--rail)) calc(4 * var(--indent)),
-        var(--rail-4) calc(4 * var(--indent)) calc(4 * var(--indent) + var(--rail)),
-        transparent calc(4 * var(--indent) + var(--rail)) calc(5 * var(--indent)),
-        var(--rail-5) calc(5 * var(--indent)) calc(5 * var(--indent) + var(--rail)),
-        transparent calc(5 * var(--indent) + var(--rail)) calc(6 * var(--indent)),
-        var(--rail-6) calc(6 * var(--indent)) calc(6 * var(--indent) + var(--rail)),
-        transparent calc(6 * var(--indent) + var(--rail)) calc(7 * var(--indent)),
-        var(--rail-7) calc(7 * var(--indent)) calc(7 * var(--indent) + var(--rail)),
-        transparent calc(7 * var(--indent) + var(--rail)) calc(8 * var(--indent))
-    ),
-    linear-gradient(var(--tint), var(--tint));
-    background-position: var(--gutter) 0, calc(var(--gutter) + var(--x)) 0;
-    background-size: calc(var(--x) + var(--rail)) 100%, 100% 100%;
-    background-repeat: no-repeat;
+    padding: 0 var(--gutter) 0.6rem;
+    border-top: 1px solid var(--border);
+    background: var(--tint, transparent);
 }
 
-/* The rails are tappable: tap one to collapse (or expand) the comment at that level. */
-.c::before {
+.c:not(.c-top) {
+    margin-left: calc(var(--gutter) + (var(--d) - 1) * var(--indent));
+    padding-left: calc(var(--rail) + var(--rail-gap));
+}
+
+.c:not(.c-top)::before {
     content: '';
     position: absolute;
-    top: 0;
-    bottom: 0;
+    top: 0.6rem;
+    bottom: 0.6rem;
     left: 0;
-    width: calc(var(--gutter) + var(--x) + var(--rail-gap) - 2px);
-    cursor: pointer;
+    width: var(--rail);
+    border-radius: var(--rail);
+    background: var(--tone);
 }
 
-/* Each comment is a faint card from its own rail rightwards, tinted with its level's color. */
-.c[data-alt] {
-    --tint: color-mix(in srgb, var(--tone) var(--tint-b), transparent);
+/* A little space before each top-level thread, so threads read as blocks. */
+.c-top:not(:first-child) {
+    margin-top: 0.6rem;
 }
 
 [data-hue='0'] {
@@ -667,70 +641,9 @@ a.story-domain:hover {
     --tone: var(--rail-7);
 }
 
-.c-top {
-    margin-top: 0.4rem;
-    border-top: 1px solid var(--border);
-    padding-top: 0.6rem;
-}
-
-/* While a rail is pressed, light up the comment it would collapse. */
-.c.c-rail-target {
-    --tint: color-mix(in srgb, var(--tone) 26%, transparent);
-}
-
-/*
- * Swiping a comment: it slides away and uncovers a strip, in the space it moved out of, saying what
- * letting go will do. The label sits still at the screen edge and mid-way down the comment's
- * on-screen part, so the comment slides off it; the strip turns accent-colored once the swipe
- * is far enough to count.
- */
-.comments {
-    overflow-x: clip;
-    touch-action: pan-y pinch-zoom;
-}
-
-.c[data-swipe]::after {
-    content: attr(data-swipe);
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    width: var(--swipe-dx, 0);
-    box-sizing: border-box;
-    display: flex;
-    align-items: flex-start;
-    padding: max(0px, calc(var(--swipe-y, 1rem) - 0.5rem)) 0.75rem 0;
-    overflow: hidden;
-    background: var(--raised);
-    color: var(--muted);
-    font-size: 0.8rem;
-    font-weight: 700;
-    line-height: 1rem;
-    white-space: nowrap;
-    pointer-events: none;
-}
-
-.c-swipe-left::after {
-    left: 100%;
-    justify-content: flex-end;
-}
-
-.c-swipe-right::after {
-    right: 100%;
-    justify-content: flex-start;
-}
-
-.c.c-swipe-armed {
-    --tint: color-mix(in srgb, var(--accent) 12%, transparent);
-}
-
-.c[data-swipe].c-swipe-armed::after {
-    background: var(--accent);
-    color: var(--on-accent);
-}
-
-/* New comments get an accent bar at the row's left edge (the cards already use the background). */
+/* New comments get a faint accent wash (plus their "new" badge). */
 .c-new {
-    box-shadow: inset 3px 0 0 var(--accent);
+    --tint: color-mix(in srgb, var(--accent) 7%, transparent);
 }
 
 .c.c-focus {
@@ -744,26 +657,23 @@ a.story-domain:hover {
     }
 }
 
+/* The header is the collapse target: clicking anywhere in it (outside its links) folds the comment. */
 .c-head {
     display: flex;
     flex-wrap: wrap;
-    align-items: baseline;
-    gap: 0 0.55rem;
+    align-items: center;
+    gap: 0.15rem 0.6rem;
+    padding: 0.55rem 0 0.2rem;
     color: var(--muted);
-    font-size: 0.8em;
+    font-size: 0.85em;
 }
 
-.c-toggle {
-    padding: 0;
-    border: 0;
-    background: none;
-    color: var(--muted);
-    font-family: var(--mono);
+.c-head:has(> .c-toggle) {
     cursor: pointer;
 }
 
 .c-author {
-    color: var(--text);
+    color: var(--title);
     font-weight: 600;
     text-decoration: none;
 }
@@ -788,11 +698,39 @@ a.story-domain:hover {
     font-weight: 700;
 }
 
+/* Expanded, the toggle is only there for keyboards and screen readers; collapsed, it shows "+N". */
+.c-toggle {
+    padding: 0 0.45em;
+    border: 0;
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--muted);
+    font: inherit;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+}
+
+.c-toggle-quiet:not(:focus-visible) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.c-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 0.6rem;
+}
+
 .c-action {
     padding: 0;
     border: 0;
     background: none;
     color: var(--muted);
+    font: inherit;
     text-decoration: none;
     cursor: pointer;
 }
@@ -802,8 +740,42 @@ a.story-domain:hover {
     text-decoration: underline;
 }
 
-.c-collapsed {
-    opacity: 0.65;
+/* "•••" (phones) and the age sit at the right end of the header, as in Apollo. */
+.c-tail {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-left: auto;
+}
+
+.c-more {
+    display: grid;
+    place-items: center;
+    width: 2.25rem;
+    height: 2rem;
+    margin: -0.25rem -0.2rem;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+}
+
+.c-more svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    fill: currentcolor;
+}
+
+@media not (pointer: coarse) {
+    .phone-only {
+        display: none;
+    }
+}
+
+.c-collapsed .c-head {
+    opacity: 0.7;
 }
 
 .c-body {
@@ -1209,6 +1181,48 @@ a.story-domain:hover {
     margin: 1rem 0 0;
     color: var(--muted);
     font-size: 0.8em;
+}
+
+/* A comment's actions (phones): a sheet at the bottom of the screen, like an iOS action sheet. */
+.comment-menu {
+    width: min(26rem, calc(100vw - 1.5rem));
+    margin: auto auto calc(0.75rem + env(safe-area-inset-bottom));
+}
+
+.comment-menu h2 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.menu-list {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.menu-item {
+    display: flex;
+    align-items: center;
+    min-height: 3rem;
+    padding: 0 1.25rem;
+    border: 0;
+    border-top: 1px solid var(--border);
+    background: none;
+    color: var(--title);
+    font: inherit;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.menu-item:first-child {
+    border-top: 0;
+}
+
+.menu-item:hover,
+.menu-item:focus-visible {
+    background: var(--surface);
 }
 
 /* ── Reader view ─────────────────────────────────────────── */

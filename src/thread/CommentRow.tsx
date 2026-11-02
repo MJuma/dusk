@@ -20,19 +20,26 @@ interface CommentRowProps {
     links: CommentLinks | undefined;
     onToggle: (id: number) => void;
     onJump: (id: number) => void;
+    /** Open the actions menu (phones show root/parent/prev/next/reply/HN there instead of inline). */
+    onMenu: (id: number) => void;
 }
 
 const NAV_LABELS = ['root', 'parent', 'prev', 'next'] as const;
 
-function toggleLabel(comment: ThreadComment, collapsed: boolean, newInside: number): string {
-    if (!collapsed) {
-        return '[–]';
-    }
+const MORE_ICON = (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="5" cy="12" r="1.8" />
+        <circle cx="12" cy="12" r="1.8" />
+        <circle cx="19" cy="12" r="1.8" />
+    </svg>
+);
+
+function hiddenLabel(comment: ThreadComment, newInside: number): string {
     const hidden = comment.descendantCount + 1;
-    return newInside > 0 ? `[+${hidden}, ${newInside} new]` : `[+${hidden}]`;
+    return newInside > 0 ? `+${hidden} · ${newInside} new` : `+${hidden}`;
 }
 
-export const CommentRow = memo(function CommentRow({ comment, storyId, isOp, collapsed, newInside, isNew, focused, links, onToggle, onJump }: CommentRowProps) {
+export const CommentRow = memo(function CommentRow({ comment, storyId, isOp, collapsed, newInside, isNew, focused, links, onToggle, onJump, onMenu }: CommentRowProps) {
     const body = useMemo(() => ({ __html: sanitizeHnHtml(comment.html) }), [comment.html]);
     const style = useMemo(() => ({ '--d': comment.depth }), [comment.depth]);
     const toggle = useCallback((): void => {
@@ -41,6 +48,9 @@ export const CommentRow = memo(function CommentRow({ comment, storyId, isOp, col
     const jump = useCallback((event: Event): void => {
         onJump(Number((event.currentTarget as HTMLElement).dataset['target']));
     }, [onJump]);
+    const openMenu = useCallback((): void => {
+        onMenu(comment.id);
+    }, [onMenu, comment.id]);
 
     let classes = 'c';
     if (comment.depth === 0) {
@@ -56,40 +66,47 @@ export const CommentRow = memo(function CommentRow({ comment, storyId, isOp, col
         classes += ' c-focus';
     }
     return (
-        <article
-            class={classes}
-            id={`c${comment.id}`}
-            style={style}
-            data-hue={comment.depth % 8}
-            data-alt={comment.siblingIndex % 2 === 1 ? '' : undefined}
-        >
+        <article class={classes} id={`c${comment.id}`} style={style} data-hue={comment.depth % 8}>
             <header class="c-head">
-                <button class="c-toggle" type="button" aria-expanded={!collapsed} onClick={toggle}>
-                    {toggleLabel(comment, collapsed, newInside)}
-                </button>
                 {comment.author && (
                     <a class={isOp ? 'c-author c-op' : 'c-author'} href={userHref(comment.author)}>
                         {comment.author}
                     </a>
                 )}
-                <span class="c-age">{timeAgo(comment.time)}</span>
                 {isNew && <span class="c-new-badge">new</span>}
-                {NAV_LABELS.map((label) => {
-                    const target = links?.[label];
-                    return target === undefined
-                        ? null
-                        : (
-                            <button key={label} class="c-action" type="button" data-target={target} onClick={jump}>
-                                {label}
-                            </button>
-                        );
-                })}
-                <a class="c-action" href={hnReplyUrl(comment.id, storyId)} target="_blank" rel="noopener noreferrer">
-                    reply
-                </a>
-                <a class="c-action" href={hnItemUrl(comment.id)} target="_blank" rel="noopener noreferrer">
-                    HN
-                </a>
+                <button
+                    class={collapsed ? 'c-toggle' : 'c-toggle c-toggle-quiet'}
+                    type="button"
+                    aria-expanded={!collapsed}
+                    aria-label={collapsed ? `Expand (${hiddenLabel(comment, newInside)})` : 'Collapse'}
+                    onClick={toggle}
+                >
+                    {collapsed ? hiddenLabel(comment, newInside) : '–'}
+                </button>
+                <span class="c-actions laptop-only">
+                    {NAV_LABELS.map((label) => {
+                        const target = links?.[label];
+                        return target === undefined
+                            ? null
+                            : (
+                                <button key={label} class="c-action" type="button" data-target={target} onClick={jump}>
+                                    {label}
+                                </button>
+                            );
+                    })}
+                    <a class="c-action" href={hnReplyUrl(comment.id, storyId)} target="_blank" rel="noopener noreferrer">
+                        reply
+                    </a>
+                    <a class="c-action" href={hnItemUrl(comment.id)} target="_blank" rel="noopener noreferrer">
+                        HN
+                    </a>
+                </span>
+                <span class="c-tail">
+                    <button class="c-more phone-only" type="button" aria-label="Comment actions" onClick={openMenu}>
+                        {MORE_ICON}
+                    </button>
+                    <span class="c-age">{timeAgo(comment.time)}</span>
+                </span>
             </header>
             {!collapsed && <div class="c-body" dangerouslySetInnerHTML={body} />}
         </article>

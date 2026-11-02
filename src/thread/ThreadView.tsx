@@ -10,10 +10,11 @@ import type { Visit } from '../app/visits';
 import { hnItemUrl } from '../data/hn';
 import { readThread } from '../data/cache';
 import { source } from '../data/source';
-import type { Thread, ThreadComment } from '../data/types';
+import type { Thread } from '../data/types';
 import { sanitizeHnHtml } from '../lib/sanitize';
 import { ago, timeAgo } from '../lib/time';
 import { savedItems, savedThread, saveSheet } from '../offline/saved';
+import { CommentMenu } from './CommentMenu';
 import { CommentRow } from './CommentRow';
 import { readingLine, rowAtLine, rowElement, scrollToRow, stickyBottom } from './navigation';
 import type { Command } from './navigation';
@@ -30,12 +31,6 @@ const FIRST_PAINT_ROWS = 80;
 /** A new comment counts as seen once it has been on screen this long. */
 const SEEN_DWELL_MS = 400;
 const SEEN_FLUSH_MS = 600;
-/** A horizontal swipe this long on a comment collapses or expands it. */
-const SWIPE_MIN_PX = 70;
-/** Movement before deciding whether a touch is a swipe (horizontal) or a scroll (vertical). */
-const SWIPE_LOCK_PX = 8;
-/** Touches starting this close to the left edge belong to the system back gesture. */
-const EDGE_PX = 24;
 
 const KEYS: Record<string, Command> = {
     j: 'next-comment',
@@ -296,181 +291,34 @@ export function ThreadView({ id, focus }: ThreadViewProps) {
         navigate('skim');
     }, [navigate]);
 
-    // Tap a rail to collapse (or expand) the comment at that level; swipe a comment either way to
-    // collapse it (or expand it, if collapsed). Both are delegated from the comment list.
+    // Clicking a comment's header (outside its links and buttons) collapses or expands it. The
+    // text below doesn't, so it stays selectable; a click that ends a selection in the header is ignored.
     const commentsRef = useRef<HTMLElement>(null);
+    const hasThread = thread !== undefined;
     useEffect(() => {
         const section = commentsRef.current;
         if (!section) {
             return undefined;
         }
-        const commentFor = (element: Element): ThreadComment | undefined => {
-            const { thread: current, index: currentIndex } = latestRef.current;
-            return current?.comments[currentIndex.position.get(Number(element.id.slice(1))) ?? -1];
-        };
-        const ancestorAt = (comment: ThreadComment, level: number): ThreadComment | undefined => {
-            const { thread: current, index: currentIndex } = latestRef.current;
-            let ancestor: ThreadComment | undefined = comment;
-            while (ancestor && ancestor.depth > level) {
-                ancestor = current?.comments[currentIndex.position.get(ancestor.parentId) ?? -1];
-            }
-            return ancestor;
-        };
-
-        /** The comment whose rail is nearest a press in a comment's rail area (its left padding). */
-        const railTarget = (target: EventTarget | null, clientX: number): ThreadComment | undefined => {
-            // Presses on a comment's text land on its children; only the rail area hits the article itself.
-            const article = target instanceof HTMLElement && target.matches('article.c') ? target : undefined;
-            const comment = article ? commentFor(article) : undefined;
-            if (!article || !comment) {
-                return undefined;
-            }
-            const style = getComputedStyle(article);
-            const railsEnd = parseFloat(style.paddingLeft);
-            const x = clientX - article.getBoundingClientRect().left;
-            if (x >= railsEnd) {
-                return undefined;
-            }
-            const indent = parseFloat(style.getPropertyValue('--indent'));
-            const gutter = railsEnd - comment.depth * indent - parseFloat(style.getPropertyValue('--rail-gap'));
-            return ancestorAt(comment, Math.max(0, Math.min(comment.depth, Math.round((x - gutter) / indent))));
-        };
-        // While a rail is pressed, highlight the comment it would collapse.
-        let pressed: Element | null = null;
-        const release = (): void => {
-            pressed?.classList.remove('c-rail-target');
-            pressed = null;
-        };
-        const onPointerDown = (event: PointerEvent): void => {
-            release();
-            const target = railTarget(event.target, event.clientX);
-            pressed = target ? rowElement(target.id) : null;
-            pressed?.classList.add('c-rail-target');
-        };
         const onClick = (event: MouseEvent): void => {
-            release();
-            const target = railTarget(event.target, event.clientX);
-            if (target) {
-                toggle(target.id);
-                jumpTo(target.id);
-            }
-        };
-
-        interface Swipe {
-            x: number;
-            y: number;
-            element: HTMLElement;
-            comment: ThreadComment;
-            axis?: 'x' | 'y';
-            armed: boolean;
-        }
-        let swipe: Swipe | undefined;
-        const settle = (element: HTMLElement): void => {
-            element.style.transition = 'transform 0.2s ease-out';
-            element.style.transform = '';
-            element.style.removeProperty('--swipe-dx');
-            element.classList.remove('c-swipe-left', 'c-swipe-right', 'c-swipe-armed');
-            delete element.dataset['swipe'];
-            element.addEventListener('transitionend', () => {
-                element.style.transition = '';
-            }, { once: true });
-        };
-        /** Start showing a swipe: label it, and place the label mid-way down the comment's on-screen part. */
-        const beginSwipe = (current: Swipe): void => {
-            const { element, comment } = current;
-            element.dataset['swipe'] = isCollapsed(comment, latestRef.current.toggled) ? 'Expand' : 'Collapse';
-            const rect = element.getBoundingClientRect();
-            const top = Math.max(rect.top, stickyBottom());
-            const bottom = Math.min(rect.bottom, window.innerHeight);
-            const middle = bottom > top ? (top + bottom) / 2 : rect.top + rect.height / 2;
-            element.style.setProperty('--swipe-y', `${Math.round(middle - rect.top)}px`);
-        };
-        const onTouchStart = (event: TouchEvent): void => {
-            const touch = event.touches[0];
-            const target = event.target instanceof Element ? event.target : undefined;
-            const article = target?.closest<HTMLElement>('article.c');
-            const comment = article ? commentFor(article) : undefined;
-            swipe = event.touches.length === 1 && touch && article && comment && touch.clientX > EDGE_PX && !target?.closest('pre, table, a, button')
-                ? { x: touch.clientX, y: touch.clientY, element: article, comment, armed: false }
-                : undefined;
-        };
-        const onTouchMove = (event: TouchEvent): void => {
-            const touch = event.touches[0];
-            if (!swipe || !touch) {
+            const target = event.target instanceof Element ? event.target : null;
+            const article = target?.closest('.c-head')?.closest('article.c');
+            if (!article || target?.closest('a, button') || window.getSelection()?.isCollapsed === false) {
                 return;
             }
-            const dx = touch.clientX - swipe.x;
-            const dy = touch.clientY - swipe.y;
-            if (!swipe.axis) {
-                if (Math.abs(dx) < SWIPE_LOCK_PX && Math.abs(dy) < SWIPE_LOCK_PX) {
-                    return;
-                }
-                // Mostly-horizontal drags are swipes; anything else is scrolling.
-                swipe.axis = Math.abs(dx) > Math.abs(dy) * 1.2 ? 'x' : 'y';
-                if (swipe.axis === 'y') {
-                    return;
-                }
-                beginSwipe(swipe);
-            }
-            if (swipe.axis !== 'x') {
-                return;
-            }
-            const { element } = swipe;
-            swipe.armed = Math.abs(dx) >= SWIPE_MIN_PX;
-            // Follow the finger, with resistance past the threshold.
-            const distance = Math.abs(dx);
-            const moved = Math.round(distance <= SWIPE_MIN_PX ? distance : SWIPE_MIN_PX + (distance - SWIPE_MIN_PX) * 0.6);
-            element.style.transition = 'none';
-            element.style.transform = `translateX(${Math.sign(dx) * moved}px)`;
-            // The strip behind the label fills exactly the space the comment has moved out of.
-            element.style.setProperty('--swipe-dx', `${moved}px`);
-            element.classList.toggle('c-swipe-left', dx < 0);
-            element.classList.toggle('c-swipe-right', dx > 0);
-            element.classList.toggle('c-swipe-armed', swipe.armed);
+            toggle(Number(article.id.slice(1)));
         };
-        const onTouchEnd = (): void => {
-            const done = swipe;
-            swipe = undefined;
-            if (!done || done.axis !== 'x') {
-                return;
-            }
-            settle(done.element);
-            if (done.armed) {
-                const { comment, element } = done;
-                toggle(comment.id);
-                // Collapsing a comment whose top is scrolled away would leave its header off screen.
-                if (element.getBoundingClientRect().top < stickyBottom()) {
-                    jumpTo(comment.id);
-                } else {
-                    setFocusId(comment.id);
-                }
-            }
-        };
-        const onTouchCancel = (): void => {
-            if (swipe?.axis === 'x') {
-                settle(swipe.element);
-            }
-            swipe = undefined;
-        };
-        section.addEventListener('pointerdown', onPointerDown);
-        section.addEventListener('pointerup', release);
-        section.addEventListener('pointercancel', release);
         section.addEventListener('click', onClick);
-        section.addEventListener('touchstart', onTouchStart, { passive: true });
-        section.addEventListener('touchmove', onTouchMove, { passive: true });
-        section.addEventListener('touchend', onTouchEnd, { passive: true });
-        section.addEventListener('touchcancel', onTouchCancel, { passive: true });
         return () => {
-            section.removeEventListener('pointerdown', onPointerDown);
-            section.removeEventListener('pointerup', release);
-            section.removeEventListener('pointercancel', release);
             section.removeEventListener('click', onClick);
-            section.removeEventListener('touchstart', onTouchStart);
-            section.removeEventListener('touchmove', onTouchMove);
-            section.removeEventListener('touchend', onTouchEnd);
-            section.removeEventListener('touchcancel', onTouchCancel);
         };
-    }, [toggle, jumpTo, thread]);
+    }, [toggle, hasThread]);
+
+    const [menuId, setMenuId] = useState<number>();
+    const closeMenu = useCallback(() => {
+        setMenuId(undefined);
+    }, []);
+    const menuComment = menuId === undefined ? undefined : thread?.comments[index.position.get(menuId) ?? -1];
 
     const openSave = useCallback(() => {
         if (thread) {
@@ -665,9 +513,11 @@ export function ThreadView({ id, focus }: ThreadViewProps) {
                         links={index.links.get(comment.id)}
                         onToggle={toggle}
                         onJump={jumpTo}
+                        onMenu={setMenuId}
                     />
                 ))}
             </section>
+            {menuComment && <CommentMenu comment={menuComment} storyId={story.id} links={index.links.get(menuComment.id)} onJump={jumpTo} onClose={closeMenu} />}
             {!thread.complete && <p class="status">Ordering replies…</p>}
             {thread.complete && thread.unavailable > 0 && (
                 <p class="status">
