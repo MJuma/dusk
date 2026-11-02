@@ -7,11 +7,13 @@
  *   side's row actions are turned on), since iOS gives home-screen apps no back gesture. Like iOS
  *   (and Apollo), the page follows the finger and uncovers a picture of the previous page, or
  *   the next page slides in over it.
+ * - Also in the installed app (Safari has its own), pulling down at the top of a page refreshes it.
  */
 import { COMMENT_ACTIONS, runAction, STORY_ACTIONS } from '../app/actions';
 import { isInstalledApp } from '../app/device';
 import { overlayOpen } from '../app/overlay';
 import { splitActive } from '../app/layout';
+import { loading, refresh } from '../app/refresh';
 import { canGoBack, canGoForward, goBack, goForward, historyIndex, onLeavePage, route } from '../app/router';
 import { settings } from '../app/settings';
 import type { Settings } from '../app/settings';
@@ -369,6 +371,63 @@ function hideNav(): void {
     indicator?.classList.remove('swipe-nav-shown', 'swipe-nav-armed');
 }
 
+// ── Pull to refresh ──────────────────────────────────────────────────────────
+
+/** Pulling this far (after resistance) refreshes when let go. */
+const PULL_PX = 64;
+const PULL_MAX_PX = 110;
+/** While refreshing, the page rests this far down with the spinner above it. */
+const PULL_REST_PX = 48;
+
+let pullIndicator: HTMLElement | undefined;
+
+/** Pulling down starts a refresh only from the very top of what's scrolling. */
+function atTop(target: Element): boolean {
+    const pane = target.closest<HTMLElement>('.split-list');
+    return pane ? pane.scrollTop <= 0 : window.scrollY <= 0;
+}
+
+function showPull(offset: number, animate: boolean): void {
+    const page = document.querySelector<HTMLElement>('#app > .page');
+    if (!pullIndicator) {
+        pullIndicator = document.createElement('div');
+        pullIndicator.className = 'pull-indicator';
+        pullIndicator.setAttribute('aria-hidden', 'true');
+        pullIndicator.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6" /></svg>';
+        document.body.append(pullIndicator);
+    }
+    const transition = animate ? `transform ${SETTLE_MS}ms ease-out` : 'none';
+    if (page) {
+        page.style.transition = transition;
+        page.style.transform = offset > 0 ? `translateY(${offset}px)` : '';
+        page.classList.toggle('page-pulling', offset > 0);
+    }
+    pullIndicator.style.transition = animate ? `transform ${SETTLE_MS}ms ease-out, opacity ${SETTLE_MS}ms` : 'none';
+    pullIndicator.style.setProperty('--pull', `${offset}px`);
+    pullIndicator.style.setProperty('--pull-turn', `${Math.min(1, offset / PULL_PX) * 180}deg`);
+    pullIndicator.classList.toggle('pull-armed', offset >= PULL_PX);
+    pullIndicator.classList.toggle('pull-shown', offset > 0);
+}
+
+/** Refresh, keeping the spinner up until every reload it started has finished (at least briefly). */
+function runRefresh(): void {
+    pullIndicator?.classList.add('pull-refreshing');
+    showPull(PULL_REST_PX, true);
+    refresh();
+    const started = performance.now();
+    const wait = (): void => {
+        const elapsed = performance.now() - started;
+        // Give views a moment to start reloading, then wait for them (but never forever).
+        if (elapsed < 500 || (loading.peek() > 0 && elapsed < 10_000)) {
+            window.setTimeout(wait, 100);
+            return;
+        }
+        pullIndicator?.classList.remove('pull-refreshing');
+        showPull(0, true);
+    };
+    wait();
+}
+
 // ── Tracking ─────────────────────────────────────────────────────────────────
 
 interface Gesture {
@@ -377,7 +436,10 @@ interface Gesture {
     config: SwipeConfig;
     row: Row | undefined;
     axis?: 'x' | 'y';
-    mode?: 'row' | 'nav';
+    mode?: 'row' | 'nav' | 'pull';
+    /** Where the touch started, to tell which part of the page it pulls. */
+    target: Element;
+    pull: number;
     side?: Side;
     labelY: number;
     /** What letting go now would do. */
@@ -414,7 +476,13 @@ function end(run: boolean): void {
         return;
     }
     swallowNextClick();
-    if (done.mode === 'row' && done.row) {
+    if (done.mode === 'pull') {
+        if (run && done.pull >= PULL_PX) {
+            runRefresh();
+        } else {
+            showPull(0, true);
+        }
+    } else if (done.mode === 'row' && done.row) {
         settleRow(done.row.element);
         if (run && done.action) {
             done.row.run(done.action);
@@ -455,6 +523,8 @@ document.addEventListener('touchstart', (event) => {
         speed: 0,
         lastX: touch.clientX,
         lastT: event.timeStamp,
+        target,
+        pull: 0,
     };
 }, { passive: true });
 
@@ -471,19 +541,27 @@ document.addEventListener('touchmove', (event) => {
     const dy = touch.clientY - gesture.y;
     if (!gesture.axis) {
         gesture.axis = lockAxis(dx, dy, gesture.config);
-        if (gesture.axis !== 'x') {
-            if (gesture.axis === 'y') {
-                gesture = undefined;
-            }
+        if (gesture.axis === undefined) {
             return;
         }
+        if (gesture.axis === 'y') {
+            // Pulling down from the top of the page refreshes it; any other vertical drag scrolls.
+            if (dy > 0 && isInstalledApp() && atTop(gesture.target) && !pullIndicator?.classList.contains('pull-refreshing')) {
+                gesture.mode = 'pull';
+            } else {
+                gesture = undefined;
+                return;
+            }
+        }
         // Selecting text takes precedence over swiping.
-        if (window.getSelection()?.isCollapsed === false) {
+        if (gesture.mode !== 'pull' && window.getSelection()?.isCollapsed === false) {
             gesture = undefined;
             return;
         }
         const side = sideOf(dx);
-        if (gesture.row && hasActions(gesture.row, side)) {
+        if (gesture.mode === 'pull') {
+            // Decided above.
+        } else if (gesture.row && hasActions(gesture.row, side)) {
             gesture.mode = 'row';
             gesture.labelY = labelY(gesture.row.element);
         } else if (navigates(side)) {
@@ -501,7 +579,11 @@ document.addEventListener('touchmove', (event) => {
     }
     // Once a swipe has started, it owns the touch: no scrolling at the same time.
     event.preventDefault();
-    if (gesture.mode === 'row' && gesture.row) {
+    if (gesture.mode === 'pull') {
+        // Follow the finger with growing resistance, up to a limit.
+        gesture.pull = Math.round(Math.min(PULL_MAX_PX, Math.max(0, dy) * 0.55));
+        showPull(gesture.pull, false);
+    } else if (gesture.mode === 'row' && gesture.row) {
         gesture.action = showRow(gesture.row, dx, gesture.config, gesture.labelY);
     } else if (gesture.mode === 'nav' && gesture.side) {
         // Only movement toward the side that navigates counts.

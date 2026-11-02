@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 
-import { refreshTick } from '../app/refresh';
+import { refreshTick, tracked } from '../app/refresh';
 import type { AlgoliaQuery } from '../data/hn';
 import { source } from '../data/source';
 import type { ActivityPage, Story, UserComment } from '../data/types';
@@ -48,7 +48,7 @@ export function ActivityList({ search, empty, filter, showAuthors = true }: Acti
     useEffect(() => {
         let active = true;
         setError(undefined);
-        source.listing<Item>(search, 0)
+        tracked(source.listing<Item>(search, 0))
             .then((first) => {
                 if (active) {
                     setPages((current) => (current.length > 1 ? [first, ...current.slice(1)] : [first]));

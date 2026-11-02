@@ -374,6 +374,66 @@ svg {
     left: 0;
 }
 
+/* Pull to refresh (installed app): the page moves down and a spinner appears in the gap. */
+.page-pulling .thread-nav {
+    visibility: hidden;
+}
+
+.pull-indicator {
+    position: fixed;
+    top: var(--topbar-h);
+    left: 50%;
+    z-index: 0;
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    margin-left: -16px;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    background: var(--raised);
+    color: var(--muted);
+    opacity: 0;
+    transform: translateY(calc(var(--pull, 0px) / 2 - 16px));
+    pointer-events: none;
+}
+
+.pull-shown {
+    opacity: 1;
+}
+
+.pull-indicator svg {
+    width: 18px;
+    height: 18px;
+    transform: rotate(var(--pull-turn, 0deg));
+}
+
+.pull-armed {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+/* Refreshing: the arrow gives way to a spinning ring. */
+.pull-refreshing svg {
+    display: none;
+}
+
+.pull-refreshing::after {
+    content: '';
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--accent);
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: pull-spin 0.7s linear infinite;
+}
+
+@keyframes pull-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 /* ── Top bar ─────────────────────────────────────────────── */
 
 .topbar {

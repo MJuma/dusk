@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
 
-import { refreshTick } from '../app/refresh';
+import { refreshTick, tracked } from '../app/refresh';
 import { userHref } from '../app/router';
 import type { UserTab } from '../app/router';
 import { hnUserUrl } from '../data/hn';
@@ -28,7 +28,7 @@ export function UserView({ id, tab }: UserViewProps) {
 
     useEffect(() => {
         let active = true;
-        source.user(id)
+        tracked(source.user(id))
             .then((loaded) => {
                 if (active) {
                     setProfile(loaded);

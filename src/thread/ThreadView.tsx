@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 
 import { online } from '../app/online';
-import { refreshTick } from '../app/refresh';
+import { refreshTick, tracked } from '../app/refresh';
 import { fromHref, itemHref, readHref, replaceRoute, userHref } from '../app/router';
 import { useKeyScope } from '../app/keymap';
 import { settings } from '../app/settings';
@@ -96,7 +96,7 @@ export function ThreadView({ id, focus }: ThreadViewProps) {
         }
         setError(undefined);
         performance.mark('dusk:thread-start');
-        source.thread(id, accept)
+        tracked(source.thread(id, accept))
             .then(accept)
             .catch((reason: unknown) => {
                 if (active) {

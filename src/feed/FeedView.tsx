@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 
 import { online } from '../app/online';
-import { refreshTick } from '../app/refresh';
+import { refreshTick, tracked } from '../app/refresh';
 import { SAVED_HREF } from '../app/router';
 import { readFeedPage } from '../data/cache';
 import { PAGE_SIZE, source } from '../data/source';
@@ -78,7 +78,7 @@ export function FeedView({ kind, page }: FeedViewProps) {
             const end = loaded.findIndex((feedPage) => !feedPage.hasMore);
             return end === -1 ? loaded : loaded.slice(0, end + 1);
         };
-        load()
+        tracked(load())
             .then((loaded) => {
                 if (active) {
                     setPages(loaded);
