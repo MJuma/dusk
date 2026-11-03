@@ -4,3 +4,5 @@ dev-dist
 coverage
 *.tsbuildinfo
 .measure
+# Launch video work (brag): frames, music, demo data.
+brag-output

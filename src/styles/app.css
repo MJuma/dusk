@@ -308,7 +308,7 @@ svg {
 
 /*
  * The page below the top bar. In the installed app, swiping back slides it away to the right and
- * uncovers a picture of the previous page beneath, like iOS (and Apollo); swiping forward slides
+ * uncovers a picture of the previous page beneath, like iOS; swiping forward slides
  * the next page in over it from the right.
  */
 .page {
@@ -807,7 +807,7 @@ a.story-domain:hover {
 }
 
 /*
- * Comments, like Apollo: each reply is indented by its depth and marked by one short bar in its
+ * Comments: each reply is indented by its depth and marked by one short bar in its
  * level's color (cycling through 8 hues); top-level comments have none. The page stays flat, and
  * a hairline above each comment, starting at its bar, separates it from the one before.
  */
@@ -993,7 +993,7 @@ a.story-domain:hover {
     text-decoration: underline;
 }
 
-/* "•••" (phones) sits at the right end of the header, as in Apollo. */
+/* "•••" (phones) sits at the right end of the header. */
 .c-more {
     display: grid;
     place-items: center;

@@ -4,9 +4,9 @@
  * - On a story or comment row, a horizontal swipe toward a side with actions slides the row and
  *   uncovers a strip naming the action it will run (Settings › Gestures).
  * - Otherwise, in the installed app, swiping right goes back and left goes forward (unless that
- *   side's row actions are turned on), since iOS gives home-screen apps no back gesture. Like iOS
- *   (and Apollo), the page follows the finger and uncovers a picture of the previous page, or
- *   the next page slides in over it.
+ *   side's row actions are turned on), since iOS gives home-screen apps no back gesture. Like iOS,
+ *   the page follows the finger and uncovers a picture of the previous page, or the next page
+ *   slides in over it.
  * - Also in the installed app (Safari has its own), pulling down at the top of a page refreshes it.
  */
 import { COMMENT_ACTIONS, runAction, STORY_ACTIONS } from '../app/actions';
