@@ -10,10 +10,13 @@ import type { FeedKind, Story, Thread } from './types';
  */
 export interface CachedFeedPage {
     key: string;
+    /** When the ranking the page was cut from was taken. */
     at: number;
     page: number;
     stories: Story[];
     hasMore: boolean;
+    /** That ranking's story ids, so "More" can continue it after a relaunch. Missing from pages saved by older versions. */
+    ids?: number[];
 }
 
 export interface CachedThread {
@@ -53,8 +56,8 @@ export async function readFeedPage(kind: FeedKind, page: number): Promise<Cached
     return (await db())?.get('feeds', feedKey(kind, page));
 }
 
-export async function writeFeedPage(kind: FeedKind, page: number, stories: Story[], hasMore: boolean): Promise<void> {
-    await (await db())?.put('feeds', { key: feedKey(kind, page), at: Date.now(), page, stories, hasMore });
+export async function writeFeedPage(kind: FeedKind, page: number, stories: Story[], hasMore: boolean, ranking: { at: number; ids: number[] }): Promise<void> {
+    await (await db())?.put('feeds', { key: feedKey(kind, page), at: ranking.at, page, stories, hasMore, ids: ranking.ids });
 }
 
 export async function readThread(id: number): Promise<CachedThread | undefined> {

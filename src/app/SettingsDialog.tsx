@@ -1,5 +1,7 @@
 import { useCallback, useState } from 'preact/hooks';
 
+import { AppearanceSample } from './AppearanceSample';
+import { DataPage } from './DataPage';
 import type { KeyScope } from './keymap';
 import { settings, settingsOpen, updateSettings } from './settings';
 import { PAGES } from './settings.pages';
@@ -24,6 +26,8 @@ const DONE = (
         Done
     </button>
 );
+
+const SAMPLE = <AppearanceSample />;
 
 function set(key: keyof Settings, value: Settings[keyof Settings]): void {
     updateSettings({ [key]: value });
@@ -83,6 +87,19 @@ function SliderRow({ item, current, disabled }: ItemProps<SliderItem>) {
     );
 }
 
+/** A comment bar palette's first few colors, side by side. */
+function BarsSwatch({ palette }: { palette: string }) {
+    return (
+        <span class="bars-swatch" data-bars={palette} aria-hidden="true">
+            <span />
+            <span />
+            <span />
+            <span />
+            <span />
+        </span>
+    );
+}
+
 function ChoiceRow({ item, current, disabled }: ItemProps<ChoiceItem>) {
     const onChange = useCallback((event: Event) => {
         set(item.key, (event.currentTarget as HTMLInputElement | HTMLSelectElement).value as Settings[typeof item.key]);
@@ -113,8 +130,10 @@ function ChoiceRow({ item, current, disabled }: ItemProps<ChoiceItem>) {
                     <label key={option} class="set-option">
                         <input type="radio" name={item.key} value={option} checked={option === value} onChange={onChange} />
                         {item.preview === 'theme' && <span class="swatch" data-swatch={option} aria-hidden="true">Aa</span>}
+                        {item.preview === 'bars' && <BarsSwatch palette={option} />}
                         <span class="set-option-text" data-font-preview={item.preview === 'font' ? option : undefined}>
                             {label}
+                            {item.details?.[option] && <span class="set-help">{item.details[option]}</span>}
                         </span>
                     </label>
                 ))}
@@ -166,6 +185,9 @@ function PageBody({ page, current }: { page: Page; current: Settings }) {
     if (page.id === 'shortcuts') {
         return <ShortcutsPage />;
     }
+    if (page.id === 'data') {
+        return <DataPage />;
+    }
     return (
         <>
             {page.sections.map((section) => {
@@ -201,7 +223,14 @@ export function SettingsDialog() {
     }, []);
 
     return (
-        <Sheet title={page?.title ?? 'Settings'} onClose={close} onBack={page ? back : undefined} footer={DONE} class="settings">
+        <Sheet
+            title={page?.title ?? 'Settings'}
+            onClose={close}
+            onBack={page ? back : undefined}
+            footer={DONE}
+            pinned={page?.id === 'appearance' ? SAMPLE : undefined}
+            class="settings"
+        >
             {page
                 ? <PageBody key={page.id} page={page} current={current} />
                 : (

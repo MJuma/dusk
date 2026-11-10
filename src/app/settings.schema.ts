@@ -71,7 +71,9 @@ export const SCHEMA = {
     showDomain: bool(true, 'domain'),
     showAuthor: bool(true, 'author'),
     // Appearance › Comments
+    commentStyle: choice(['flat', 'cards'], 'flat', 'comment-style'),
     indent: choice(['compact', 'normal', 'wide'], 'normal', 'indent'),
+    bars: choice(['colorful', 'pastel', 'ocean', 'sunset', 'gray'], 'colorful', 'bars'),
     // Posts
     /** The buttons under each story: "discuss", "link + discuss", both or neither. */
     storyButtons: choice(['comments', 'link', 'both', 'none'], () => (laptop() ? 'both' : 'none'), 'story-buttons'),

@@ -14,6 +14,8 @@ interface SheetProps {
     /** Content without padding, for lists that run edge to edge. */
     flush?: boolean;
     footer?: ComponentChildren;
+    /** Between the title bar and the content, staying put while the content scrolls. */
+    pinned?: ComponentChildren;
     /** Extra class on the panel. */
     class?: string;
     children: ComponentChildren;
@@ -30,7 +32,7 @@ const BACK_ICON = (
  * open while mounted; render it conditionally. Escape, the close button, or a tap outside the
  * panel calls `onClose`.
  */
-export function Sheet({ title, onClose, onBack, placement = 'center', flush = false, footer, class: extra, children }: SheetProps) {
+export function Sheet({ title, onClose, onBack, placement = 'center', flush = false, footer, pinned, class: extra, children }: SheetProps) {
     const dialog = useModalDialog(onClose);
     const titleId = useId();
     const onCancel = useCallback((event: Event) => {
@@ -53,6 +55,7 @@ export function Sheet({ title, onClose, onBack, placement = 'center', flush = fa
                         {CLOSE_ICON}
                     </button>
                 </header>
+                {pinned}
                 {/* Keyed by title so a new page starts scrolled to the top. */}
                 <div key={title} class={flush ? 'sheet-content sheet-flush' : 'sheet-content'}>
                     {children}

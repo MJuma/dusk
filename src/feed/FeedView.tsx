@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 
+import { hasFinePointer } from '../app/device';
 import { online } from '../app/online';
 import { refreshTick, tracked } from '../app/refresh';
 import { SAVED_HREF } from '../app/router';
-import { readFeedPage } from '../data/cache';
 import { PAGE_SIZE, source } from '../data/source';
-import type { FeedPage } from '../data/source';
+import type { FeedPage, StoredFeed } from '../data/source';
 import type { FeedKind, Story } from '../data/types';
 import { StoryRow } from './StoryRow';
 
@@ -23,6 +23,9 @@ interface RankedStory {
 /** How many pages each listing showed, so returning from a thread restores the appended pages. */
 const shownPages = new Map<string, number>();
 
+/** With a mouse, a cold launch shows the last launch's stories while the latest load only if they're this recent. */
+const STORED_MAX_AGE_MS = 5 * 60_000;
+
 function cachedPages(kind: FeedKind, first: number, count: number): FeedPage[] {
     const pages: FeedPage[] = [];
     for (let page = first; page < first + count; page++) {
@@ -33,6 +36,15 @@ function cachedPages(kind: FeedKind, first: number, count: number): FeedPage[] {
         pages.push(cached);
     }
     return pages;
+}
+
+/** Loads every page shown; the first takes the ranking the following pages are cut from. */
+async function loadPages(kind: FeedKind, first: number, count: number, force: boolean): Promise<FeedPage[]> {
+    const head = await source.feed(kind, first, force);
+    const rest = await Promise.all(Array.from({ length: count - 1 }, (_, offset) => source.feed(kind, first + offset + 1, force)));
+    const loaded = [head, ...rest];
+    const end = loaded.findIndex((feedPage) => !feedPage.hasMore);
+    return end === -1 ? loaded : loaded.slice(0, end + 1);
 }
 
 export function FeedView({ kind, page }: FeedViewProps) {
@@ -49,34 +61,43 @@ export function FeedView({ kind, page }: FeedViewProps) {
         aliveRef.current = false;
     }, []);
 
-    // Load (or refresh) every page currently shown, then swap them in together.
+    /*
+     * Load (or refresh) every page shown, then swap them in together. Touch screens keep the stories
+     * and order on screen until an explicit refresh, updating just their points and comment counts,
+     * so the list never shifts under a finger. With a mouse, the list shows the latest ranking.
+     */
     useEffect(() => {
         let active = true;
         const force = tick !== mountTick.current;
         const count = shownPages.get(key) ?? 1;
+        const keepRanking = !force && !hasFinePointer();
         setError(undefined);
-        // On a cold launch, show the pages from last time while fresh ones load.
-        Promise.all(Array.from({ length: count }, (_, offset) => readFeedPage(kind, page + offset).catch(() => undefined)))
-            .then((cached) => {
-                const restored: FeedPage[] = [];
-                for (const entry of cached) {
-                    if (!entry) {
-                        break;
-                    }
-                    restored.push({ kind, page: entry.page, stories: entry.stories, hasMore: entry.hasMore });
-                }
-                if (active && restored.length > 0) {
-                    setPages((current) => (current.length === 0 ? restored : current));
-                }
-            })
-            .catch(() => undefined);
+        const showStored = (stored: StoredFeed | undefined): void => {
+            if (active && stored) {
+                setPages((current) => (current.length === 0 ? stored.pages : current));
+            }
+        };
         const load = async (): Promise<FeedPage[]> => {
-            // The first page takes the ranking snapshot that the following pages are cut from.
-            const first = await source.feed(kind, page, force);
-            const rest = await Promise.all(Array.from({ length: count - 1 }, (_, offset) => source.feed(kind, page + offset + 1, force)));
-            const loaded = [first, ...rest];
-            const end = loaded.findIndex((feedPage) => !feedPage.hasMore);
-            return end === -1 ? loaded : loaded.slice(0, end + 1);
+            const cold = !force && !source.cachedFeed(kind, page);
+            if (!keepRanking) {
+                if (cold) {
+                    // Show the last launch's stories while the latest load, unless they're too old to resemble them.
+                    source.storedFeed(kind, page, count)
+                        .then((stored) => {
+                            showStored(stored && Date.now() - stored.at < STORED_MAX_AGE_MS ? stored : undefined);
+                        })
+                        .catch(() => undefined);
+                }
+                return loadPages(kind, page, count, force);
+            }
+            if (cold) {
+                const stored = await source.storedFeed(kind, page, count);
+                if (stored) {
+                    source.resumeFeed(kind, stored);
+                }
+                showStored(stored);
+            }
+            return source.cachedFeed(kind, page) ? source.updateFeed(kind, page, count) : loadPages(kind, page, count, false);
         };
         tracked(load())
             .then((loaded) => {

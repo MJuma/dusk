@@ -1,20 +1,23 @@
+import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { writeFeedPage } from './cache';
 import { HnSource } from './source';
 import type { FetchJson } from './thread.loader';
+import type { Story } from './types';
 
 function fakeHn(size: number) {
     let ranking = Array.from({ length: size }, (_, index) => index + 1);
     const calls = { rankings: 0, items: 0 };
     const fetchJson = (async (url: string) => {
-        if (url.endsWith('/topstories.json')) {
+        if (url.endsWith('stories.json')) {
             calls.rankings += 1;
             return [...ranking];
         }
         const item = /\/item\/(\d+)\.json$/.exec(url);
         if (item) {
             calls.items += 1;
-            return { id: Number(item[1]), type: 'story', title: `Story ${item[1]}`, descendants: 0 };
+            return { id: Number(item[1]), type: 'story', title: `Story ${item[1]}`, score: 100, descendants: 0 };
         }
         throw new Error(`404 ${url}`);
     }) as FetchJson;
@@ -28,6 +31,8 @@ function fakeHn(size: number) {
 }
 
 const ids = (page: { stories: { id: number }[] }): number[] => page.stories.map((story) => story.id);
+const range = (from: number, to: number): number[] => Array.from({ length: to - from + 1 }, (_, index) => from + index);
+const story = (id: number): Story => ({ id, type: 'story', title: `Story ${id}`, url: null, domain: null, by: 'pg', score: 1, time: 0, descendants: 0, text: null });
 
 describe('HnSource.feed', () => {
     afterEach(() => {
@@ -73,5 +78,26 @@ describe('HnSource.feed', () => {
         vi.setSystemTime(Date.now() + 61_000);
         await hn.source.feed('top', 0);
         expect(hn.calls.rankings).toBe(2);
+    });
+});
+
+describe('HnSource stored feeds', () => {
+    it('resumes the last launch\'s ranking and updates its stories in place', async () => {
+        await writeFeedPage('best', 0, range(1, 30).map(story), true, { at: 1000, ids: range(1, 60) });
+        const hn = fakeHn(60);
+        hn.rerank(range(1, 60).reverse());
+
+        const stored = await hn.source.storedFeed('best', 0, 1);
+        expect(stored?.pages.map(ids)).toEqual([range(1, 30)]);
+        if (stored) {
+            hn.source.resumeFeed('best', stored);
+        }
+        const [updated] = await hn.source.updateFeed('best', 0, 1);
+        const more = await hn.source.feed('best', 1);
+        await hn.source.updateFeed('best', 0, 2);
+
+        expect(updated?.stories.map((item) => [item.id, item.score])).toEqual(range(1, 30).map((id) => [id, 100]));
+        expect(ids(more)).toEqual(range(31, 60));
+        expect(hn.calls).toEqual({ rankings: 0, items: 60 });
     });
 });

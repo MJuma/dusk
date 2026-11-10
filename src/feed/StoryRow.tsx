@@ -91,7 +91,8 @@ export const StoryRow = memo(function StoryRow({ story, rank }: StoryRowProps) {
 
     const commentsTarget = newTab ? '_blank' : undefined;
     const commentsRel = newTab ? 'noopener' : undefined;
-    let commentsLabel = `${story.descendants} comments`;
+    const commentCount = story.descendants === 1 ? '1 comment' : `${story.descendants} comments`;
+    let commentsLabel = commentCount;
     if (fresh > 0) {
         commentsLabel += `, ${fresh} new`;
     }
@@ -135,6 +136,23 @@ export const StoryRow = memo(function StoryRow({ story, rank }: StoryRowProps) {
                     </a>
                 )}
                 <div class="story-meta">
+                    {story.type !== 'job' && (
+                        <span class="story-count">
+                            <a
+                                class={commentsRead ? 'story-count-read' : undefined}
+                                href={itemHref(story.id)}
+                                target={commentsTarget}
+                                rel={commentsRel}
+                                aria-label={commentsLabel}
+                                onPointerDown={prefetch}
+                                onMouseEnter={prefetch}
+                            >
+                                {commentCount}
+                                {fresh > 0 && <span class="story-new">+{fresh}</span>}
+                            </a>
+                            {' · '}
+                        </span>
+                    )}
                     {story.score} pts
                     <span class="story-author">
                         {' · '}

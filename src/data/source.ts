@@ -1,4 +1,4 @@
-import { writeFeedPage, writeThread } from './cache';
+import { readFeedPage, writeFeedPage, writeThread } from './cache';
 import { algoliaSearchUrl, commentFromHit, feedUrl, firebaseItemUrl, firebaseUserUrl, storyFromHit, toStory } from './hn';
 import type { AlgoliaQuery } from './hn';
 import { mapLimit } from './limit';
@@ -37,10 +37,24 @@ interface FeedSnapshot {
     ids: number[];
 }
 
+interface FeedEntry {
+    snapshot: FeedSnapshot;
+    page: FeedPage;
+    /** When the page's stories were fetched; 0 for pages resumed from an earlier launch. */
+    loadedAt: number;
+}
+
+/** A feed's pages kept by an earlier launch, with the ranking they were cut from. */
+export interface StoredFeed {
+    at: number;
+    ids: number[];
+    pages: FeedPage[];
+}
+
 /** Read access to HN. Everything the UI needs goes through here so the transport can change later. */
 export class HnSource {
     private readonly snapshots = new Map<FeedKind, FeedSnapshot>();
-    private readonly feeds = new Map<string, { snapshot: FeedSnapshot; page: FeedPage }>();
+    private readonly feeds = new Map<string, FeedEntry>();
     private readonly feedRequests = new Map<string, Promise<FeedPage>>();
     private readonly threads = new Map<number, Thread>();
     private readonly inflight = new Map<number, PendingThread>();
@@ -94,9 +108,81 @@ export class HnSource {
             .filter((item): item is FirebaseItem => item !== null && item.deleted !== true && item.dead !== true)
             .map(toStory);
         const result: FeedPage = { kind, page, stories, hasMore: snapshot.ids.length > (page + 1) * PAGE_SIZE };
-        this.feeds.set(`${kind}:${page}`, { snapshot, page: result });
-        writeFeedPage(kind, page, stories, result.hasMore).catch(() => undefined);
+        this.feeds.set(`${kind}:${page}`, { snapshot, page: result, loadedAt: Date.now() });
+        writeFeedPage(kind, page, stories, result.hasMore, snapshot).catch(() => undefined);
         return result;
+    }
+
+    /** A feed's pages kept in the browsing cache by an earlier launch, if they're usable. */
+    public async storedFeed(kind: FeedKind, first: number, count: number): Promise<StoredFeed | undefined> {
+        const stored = await Promise.all(Array.from({ length: count }, (_, offset) => readFeedPage(kind, first + offset).catch(() => undefined)));
+        const head = stored[0];
+        if (!head?.ids) {
+            return undefined;
+        }
+        const pages: FeedPage[] = [];
+        for (const entry of stored) {
+            // A later page cut from an older ranking doesn't continue this one.
+            if (entry?.at !== head.at) {
+                break;
+            }
+            pages.push({ kind, page: entry.page, stories: entry.stories, hasMore: entry.hasMore });
+        }
+        return { at: head.at, ids: head.ids, pages };
+    }
+
+    /**
+     * Continues a stored feed: its pages become this launch's, and "More" cuts the following pages
+     * from its ranking. Does nothing if this launch already has a ranking for the feed.
+     */
+    public resumeFeed(kind: FeedKind, stored: StoredFeed): void {
+        if (this.snapshots.has(kind)) {
+            return;
+        }
+        const snapshot: FeedSnapshot = { at: stored.at, ids: stored.ids };
+        this.snapshots.set(kind, snapshot);
+        for (const page of stored.pages) {
+            this.feeds.set(`${kind}:${page.page}`, { snapshot, page, loadedAt: 0 });
+        }
+    }
+
+    /**
+     * Fresh points, comment counts and titles for a feed's pages in memory, keeping their stories
+     * and order: only `feed` takes a new ranking. Pages fetched within the last minute are kept.
+     */
+    public updateFeed(kind: FeedKind, first: number, count: number): Promise<FeedPage[]> {
+        const entries: FeedEntry[] = [];
+        for (let page = first; page < first + count; page++) {
+            const entry = this.feeds.get(`${kind}:${page}`);
+            if (!entry) {
+                break;
+            }
+            entries.push(entry);
+        }
+        if (entries.every((entry) => Date.now() - entry.loadedAt < FEED_FRESH_MS)) {
+            return Promise.resolve(entries.map((entry) => entry.page));
+        }
+        return this.shared(`update:${kind}:${first}:${count}`, async () => {
+            const ids = entries.flatMap((entry) => entry.page.stories.map((story) => story.id));
+            const items = await mapLimit(ids, CONCURRENCY, (id) => this.fetchJson<FirebaseItem | null>(firebaseItemUrl(id)));
+            const latest = new Map<number, Story>();
+            for (const item of items) {
+                if (item !== null && item.deleted !== true && item.dead !== true) {
+                    latest.set(item.id, toStory(item));
+                }
+            }
+            const loadedAt = Date.now();
+            return entries.map(({ snapshot, page }) => {
+                const updated: FeedPage = { ...page, stories: page.stories.map((story) => latest.get(story.id) ?? story) };
+                const key = `${kind}:${page.page}`;
+                // A refresh may have replaced the page meanwhile; keep the newer one.
+                if (this.feeds.get(key)?.snapshot === snapshot) {
+                    this.feeds.set(key, { snapshot, page: updated, loadedAt });
+                    writeFeedPage(kind, page.page, updated.stories, updated.hasMore, snapshot).catch(() => undefined);
+                }
+                return updated;
+            });
+        });
     }
 
     /** The last loaded version of a thread, or the latest snapshot of a load still in flight. */

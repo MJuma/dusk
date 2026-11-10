@@ -4,6 +4,7 @@
  */
 :root {
     color-scheme: dark;
+    --danger: #f0605d;
     --bg: #101216;
     --surface: #171a1f;
     --raised: #1d2128;
@@ -18,14 +19,6 @@
     --link-visited: #b39ddb;
     --focus-tint: rgb(140 196 255 / 0.12);
     --shadow: rgb(0 0 0 / 0.35);
-    --rail-0: #ff8a3d;
-    --rail-1: #4fb3d9;
-    --rail-2: #a78bfa;
-    --rail-3: #6cc070;
-    --rail-4: #f06292;
-    --rail-5: #e5c07b;
-    --rail-6: #5c9cf5;
-    --rail-7: #4dd0b5;
     --indent: 14px;
     --rail: 3px;
     /* Space between a comment's own rail and its text. */
@@ -37,6 +30,19 @@
     --topbar-h: calc(env(safe-area-inset-top) + 0.7rem + 37px);
     --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
     --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* The comment bars' colors, one per reply depth (Colorful, the default; other palettes below). */
+:root,
+.bars-swatch[data-bars='colorful'] {
+    --rail-0: #ff8a3d;
+    --rail-1: #4fb3d9;
+    --rail-2: #a78bfa;
+    --rail-3: #6cc070;
+    --rail-4: #f06292;
+    --rail-5: #e5c07b;
+    --rail-6: #5c9cf5;
+    --rail-7: #4dd0b5;
 }
 
 /* Warm grays from Dark Reader's rendering of HN. */
@@ -88,6 +94,7 @@
 
 :root[data-theme='light'] {
     color-scheme: light;
+    --danger: #cf222e;
     --bg: #f6f6ef;
     --surface: #ffffff;
     --raised: #ffffff;
@@ -102,6 +109,11 @@
     --link-visited: #6f42c1;
     --focus-tint: rgb(10 88 202 / 0.1);
     --shadow: rgb(0 0 0 / 0.12);
+}
+
+/* Deeper Colorful bars for Paper. */
+:root[data-theme='light'],
+:root[data-theme='light'] .bars-swatch[data-bars='colorful'] {
     --rail-0: #e8710a;
     --rail-1: #1b8fbf;
     --rail-2: #7c5cd6;
@@ -110,6 +122,71 @@
     --rail-5: #b8901f;
     --rail-6: #2f6fd6;
     --rail-7: #1f9e86;
+}
+
+/*
+ * Settings › Appearance › Comment Bars. Each palette suits dark and light themes alike, except
+ * Pastel, which deepens on Paper. The swatches in Settings carry data-bars too.
+ */
+:root[data-bars='pastel'],
+.bars-swatch[data-bars='pastel'] {
+    --rail-0: #f5b38a;
+    --rail-1: #9fd3e8;
+    --rail-2: #c7b6f5;
+    --rail-3: #a8dcae;
+    --rail-4: #f3a9c4;
+    --rail-5: #efd99a;
+    --rail-6: #a9c3f5;
+    --rail-7: #9fe0d0;
+}
+
+:root[data-theme='light'][data-bars='pastel'],
+:root[data-theme='light'] .bars-swatch[data-bars='pastel'] {
+    --rail-0: #e8935f;
+    --rail-1: #6fb3cf;
+    --rail-2: #a38ee6;
+    --rail-3: #7fbf86;
+    --rail-4: #e384a6;
+    --rail-5: #d4b45a;
+    --rail-6: #7d9ee6;
+    --rail-7: #6cc3ad;
+}
+
+:root[data-bars='ocean'],
+.bars-swatch[data-bars='ocean'] {
+    --rail-0: #3b8fd9;
+    --rail-1: #23b5a6;
+    --rail-2: #6c7be0;
+    --rail-3: #3fb4d8;
+    --rail-4: #2f6fbf;
+    --rail-5: #4cc28d;
+    --rail-6: #8a7ce6;
+    --rail-7: #2aa0b8;
+}
+
+:root[data-bars='sunset'],
+.bars-swatch[data-bars='sunset'] {
+    --rail-0: #f07a3a;
+    --rail-1: #e5534b;
+    --rail-2: #f2a93b;
+    --rail-3: #d9578f;
+    --rail-4: #f28c5b;
+    --rail-5: #c2453a;
+    --rail-6: #e8c04a;
+    --rail-7: #e06a9a;
+}
+
+/* Two grays, alternating, so neighboring depths still differ. */
+:root[data-bars='gray'],
+.bars-swatch[data-bars='gray'] {
+    --rail-0: var(--muted);
+    --rail-1: color-mix(in srgb, var(--muted) 55%, var(--bg));
+    --rail-2: var(--muted);
+    --rail-3: color-mix(in srgb, var(--muted) 55%, var(--bg));
+    --rail-4: var(--muted);
+    --rail-5: color-mix(in srgb, var(--muted) 55%, var(--bg));
+    --rail-6: var(--muted);
+    --rail-7: color-mix(in srgb, var(--muted) 55%, var(--bg));
 }
 
 /* Reply indent per level. HN uses 40px on desktop and 12px on phones. */
@@ -671,6 +748,32 @@ a.story-domain:hover {
     font-weight: 700;
 }
 
+/* The comment count leading the line under the title (laptops; see below). */
+.story-count {
+    display: none;
+}
+
+.story-count a {
+    color: var(--title);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.story-count a:hover {
+    text-decoration: underline;
+}
+
+.story-count .story-count-read {
+    color: var(--read);
+    font-weight: 500;
+}
+
+/* inline-block keeps the link's hover underline off the badge. */
+.story-count .story-new {
+    display: inline-block;
+    margin: 0 0 0 0.4em;
+}
+
 .more {
     display: block;
     width: 100%;
@@ -720,6 +823,38 @@ a.story-domain:hover {
 
 :root[data-rank='off'] .story-thumbs {
     grid-template-columns: var(--thumb-w) 1fr auto;
+}
+
+/*
+ * With a mouse, the comment count sits right under the title instead of in a badge at the row's
+ * far end, which on a wide screen is a long way from the title. It also takes "discuss"'s place.
+ * Touch screens keep the badge, a big target for a thumb.
+ */
+@media not (pointer: coarse) {
+    .story-comments,
+    .story-discuss {
+        display: none;
+    }
+
+    .story-count {
+        display: inline;
+    }
+
+    .story {
+        grid-template-columns: 1.8em 1fr;
+    }
+
+    .story-thumbs {
+        grid-template-columns: 2.2em var(--thumb-w) 1fr;
+    }
+
+    :root[data-rank='off'] .story {
+        grid-template-columns: 1fr;
+    }
+
+    :root[data-rank='off'] .story-thumbs {
+        grid-template-columns: var(--thumb-w) 1fr;
+    }
 }
 
 .status {
@@ -870,6 +1005,91 @@ a.story-domain:hover {
 
 [data-hue='7'] {
     --tone: var(--rail-7);
+}
+
+/*
+ * Comment Style › Cards (Settings › Appearance): each top-level thread in a card, and each reply in a
+ * box inside its parent's, shaded by depth, with its bar color as the box's left edge. The comments
+ * are one flat list, so each row paints its ancestors' box edges beside itself, from its depth.
+ */
+:root[data-comment-style='cards'] .comments {
+    --card-pad: 0.75rem;
+    --card-radius: 10px;
+    --box-even: var(--surface);
+    --box-odd: color-mix(in srgb, var(--surface) 50%, var(--bg));
+    /* Box edges are quieter than Flat's bars: thinner, and half blended into the box. */
+    --edge: 2px;
+    --edge-0: color-mix(in srgb, var(--rail-0) 50%, transparent);
+    --edge-1: color-mix(in srgb, var(--rail-1) 50%, transparent);
+    --edge-2: color-mix(in srgb, var(--rail-2) 50%, transparent);
+    --edge-3: color-mix(in srgb, var(--rail-3) 50%, transparent);
+    --edge-4: color-mix(in srgb, var(--rail-4) 50%, transparent);
+    --edge-5: color-mix(in srgb, var(--rail-5) 50%, transparent);
+    --edge-6: color-mix(in srgb, var(--rail-6) 50%, transparent);
+    --edge-7: color-mix(in srgb, var(--rail-7) 50%, transparent);
+    padding: 0.75rem var(--gutter);
+}
+
+:root[data-comment-style='cards'] .c {
+    /* Where this reply's box starts, from the card's left edge. */
+    --box-x: calc(var(--card-pad) + (var(--d) - 1) * var(--indent));
+    --box: var(--box-even);
+    margin: 0;
+    padding: 0 var(--card-pad) 0.6rem calc(var(--box-x) + var(--edge) + var(--rail-gap));
+    border: solid var(--border);
+    border-width: 0 1px;
+    background:
+        linear-gradient(var(--border), var(--border)) var(--box-x) 0 / 100% 1px no-repeat,
+        linear-gradient(var(--tint, transparent), var(--tint, transparent)) var(--box-x) 0 / 100% 100% no-repeat,
+        linear-gradient(to right, color-mix(in srgb, var(--tone) 50%, transparent) 0 var(--edge), var(--box) var(--edge)) var(--box-x) 0 / 100% 100% no-repeat,
+        /* The ancestors' boxes: one band per depth, its color as the left edge, repeating every 8 like the hues. */
+        repeating-linear-gradient(
+            to right,
+            var(--edge-1) 0 var(--edge),
+            var(--box-odd) var(--edge) var(--indent),
+            var(--edge-2) var(--indent) calc(var(--indent) + var(--edge)),
+            var(--box-even) calc(var(--indent) + var(--edge)) calc(2 * var(--indent)),
+            var(--edge-3) calc(2 * var(--indent)) calc(2 * var(--indent) + var(--edge)),
+            var(--box-odd) calc(2 * var(--indent) + var(--edge)) calc(3 * var(--indent)),
+            var(--edge-4) calc(3 * var(--indent)) calc(3 * var(--indent) + var(--edge)),
+            var(--box-even) calc(3 * var(--indent) + var(--edge)) calc(4 * var(--indent)),
+            var(--edge-5) calc(4 * var(--indent)) calc(4 * var(--indent) + var(--edge)),
+            var(--box-odd) calc(4 * var(--indent) + var(--edge)) calc(5 * var(--indent)),
+            var(--edge-6) calc(5 * var(--indent)) calc(5 * var(--indent) + var(--edge)),
+            var(--box-even) calc(5 * var(--indent) + var(--edge)) calc(6 * var(--indent)),
+            var(--edge-7) calc(6 * var(--indent)) calc(6 * var(--indent) + var(--edge)),
+            var(--box-odd) calc(6 * var(--indent) + var(--edge)) calc(7 * var(--indent)),
+            var(--edge-0) calc(7 * var(--indent)) calc(7 * var(--indent) + var(--edge)),
+            var(--box-even) calc(7 * var(--indent) + var(--edge)) calc(8 * var(--indent))
+        ) var(--card-pad) 0 / calc((var(--d) - 1) * var(--indent)) 100% no-repeat,
+        var(--box-even);
+}
+
+:root[data-comment-style='cards'] .c:is([data-hue='1'], [data-hue='3'], [data-hue='5'], [data-hue='7']) {
+    --box: var(--box-odd);
+}
+
+:root[data-comment-style='cards'] .c::before {
+    content: none;
+}
+
+:root[data-comment-style='cards'] .c-top {
+    padding-left: var(--card-pad);
+    border-top-width: 1px;
+    border-radius: var(--card-radius) var(--card-radius) 0 0;
+    background: linear-gradient(var(--tint, transparent), var(--tint, transparent)), var(--box-even);
+}
+
+:root[data-comment-style='cards'] .c-top:not(:first-child) {
+    margin-top: 0.75rem;
+}
+
+/* The last row of a thread closes its card. */
+:root[data-comment-style='cards'] .c:has(+ .c-top),
+:root[data-comment-style='cards'] .c:last-child {
+    border-bottom-width: 1px;
+    border-bottom-right-radius: var(--card-radius);
+    border-bottom-left-radius: var(--card-radius);
 }
 
 /* New comments get a faint accent wash (plus their "new" badge). */
@@ -1343,6 +1563,24 @@ a.story-domain:hover {
     margin: 0 0 1.1rem;
 }
 
+/* Appearance's live sample, pinned above the settings: a story and its replies with the current settings. */
+.set-sample {
+    flex: none;
+    padding: 0.75rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.set-sample-frame {
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg);
+}
+
+:root:not([data-comment-style='cards']) .set-sample .c:first-child {
+    border-top: 0;
+}
+
 .set-section:last-child {
     margin-bottom: 0;
 }
@@ -1596,6 +1834,35 @@ kbd {
     margin-left: -0.5rem;
 }
 
+.bars-swatch {
+    display: inline-flex;
+    flex: none;
+    gap: 3px;
+    height: 1.2em;
+}
+
+.bars-swatch span {
+    width: 4px;
+    border-radius: 2px;
+    background: var(--rail-0);
+}
+
+.bars-swatch span:nth-child(2) {
+    background: var(--rail-1);
+}
+
+.bars-swatch span:nth-child(3) {
+    background: var(--rail-2);
+}
+
+.bars-swatch span:nth-child(4) {
+    background: var(--rail-3);
+}
+
+.bars-swatch span:nth-child(5) {
+    background: var(--rail-4);
+}
+
 .swatch {
     display: inline-grid;
     place-items: center;
@@ -1640,6 +1907,32 @@ kbd {
     background: #f6f6ef;
     color: #111111;
     box-shadow: inset 0 -3px 0 #e05a00;
+}
+
+/* Settings › Data: each row's button. */
+.set-action {
+    flex: none;
+    padding: 0.35rem 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--raised);
+    color: var(--title);
+    font: inherit;
+    font-size: 0.9em;
+    cursor: pointer;
+}
+
+.set-action:hover:not(:disabled) {
+    border-color: var(--muted);
+}
+
+.set-action:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.set-action-danger {
+    color: var(--danger);
 }
 
 .settings-done {

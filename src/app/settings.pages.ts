@@ -23,8 +23,10 @@ export interface ChoiceItem extends ItemBase {
     control: 'radios' | 'segmented' | 'select';
     key: ChoiceKey;
     options: Record<string, string>;
-    /** Show each option in its theme's colors or its font. */
-    preview?: 'theme' | 'font';
+    /** A line under some options' labels. */
+    details?: Partial<Record<string, string>>;
+    /** Show each option in its theme's colors, its font or its comment bar colors. */
+    preview?: 'theme' | 'font' | 'bars';
 }
 
 export interface SwitchItem extends ItemBase {
@@ -45,7 +47,7 @@ export interface Section {
     items: Item[];
 }
 
-export type PageId = 'appearance' | 'posts' | 'comments' | 'gestures' | 'shortcuts';
+export type PageId = 'appearance' | 'posts' | 'comments' | 'gestures' | 'shortcuts' | 'data';
 
 export interface Page {
     id: PageId;
@@ -60,7 +62,7 @@ function choice<K extends ChoiceKey>(
     label: string,
     control: ChoiceItem['control'],
     options: Record<Settings[K], string>,
-    extra: Partial<Pick<ChoiceItem, 'help' | 'when' | 'enabledIf' | 'preview'>> = {},
+    extra: Partial<Pick<ChoiceItem, 'help' | 'when' | 'enabledIf' | 'preview'>> & { details?: Partial<Record<Settings[K], string>> } = {},
 ): ChoiceItem {
     return { control, key, label, options, ...extra };
 }
@@ -84,13 +86,23 @@ export const PAGES: readonly Page[] = [
                 title: 'General',
                 items: [
                     choice('theme', 'Theme', 'radios', {
-                        'system': 'System (Dusk or Light)',
-                        'dusk': 'Dusk',
-                        'dark-reader': 'Dark',
-                        'dim': 'Dim',
-                        'black': 'Black (OLED)',
-                        'light': 'Light',
-                    }, { preview: 'theme' }),
+                        'system': 'Automatic',
+                        'dusk': 'Midnight',
+                        'dark-reader': 'Charcoal',
+                        'dim': 'Slate',
+                        'black': 'Black',
+                        'light': 'Paper',
+                    }, {
+                        preview: 'theme',
+                        details: {
+                            'system': 'Midnight or Paper, following your device.',
+                            'dusk': 'Blue-black with orange accents.',
+                            'dark-reader': 'Warm dark grays.',
+                            'dim': 'Soft blue-gray, lower contrast.',
+                            'black': 'Pure black, for OLED screens.',
+                            'light': 'Dark text on HN’s off-white.',
+                        },
+                    }),
                     choice('font', 'Font', 'radios', {
                         system: 'System',
                         verdana: 'Verdana (like HN)',
@@ -124,7 +136,19 @@ export const PAGES: readonly Page[] = [
             },
             {
                 title: 'Comments',
-                items: [choice('indent', 'Reply Indent', 'segmented', { compact: 'Compact', normal: 'Normal', wide: 'Wide' })],
+                items: [
+                    choice('commentStyle', 'Comment Style', 'segmented', { flat: 'Flat', cards: 'Cards' }, {
+                        help: 'Cards put each thread in a card, with every reply in a box inside its parent’s.',
+                    }),
+                    choice('indent', 'Reply Indent', 'segmented', { compact: 'Compact', normal: 'Normal', wide: 'Wide' }),
+                    choice('bars', 'Comment Bars', 'radios', {
+                        colorful: 'Colorful',
+                        pastel: 'Pastel',
+                        ocean: 'Ocean',
+                        sunset: 'Sunset',
+                        gray: 'Gray',
+                    }, { preview: 'bars', help: 'The color of the bar beside each reply, by how deep it is.' }),
+                ],
             },
         ],
     },
@@ -136,7 +160,7 @@ export const PAGES: readonly Page[] = [
                 title: 'Stories',
                 items: [
                     choice('storyButtons', 'Story Buttons', 'segmented', { comments: 'Comments', link: 'Link', both: 'Both', none: 'None' }, {
-                        help: 'Under each story: Comments is “discuss”, Link is “link + discuss”.',
+                        help: 'Under each story: Comments is “discuss”, Link is “link + discuss”. With a mouse, the comment count takes the place of “discuss”.',
                     }),
                 ],
             },
@@ -190,4 +214,6 @@ export const PAGES: readonly Page[] = [
         when: () => hasFinePointer() || isIpad(),
         sections: [],
     },
+    // Rendered by DataPage: what's stored on this device, with buttons to clear it.
+    { id: 'data', title: 'Data', sections: [] },
 ];

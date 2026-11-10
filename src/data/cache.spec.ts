@@ -18,9 +18,9 @@ describe('browsing cache', () => {
     });
 
     it('remembers feed pages', async () => {
-        await writeFeedPage('top', 1, [story(5), story(6)], true);
+        await writeFeedPage('top', 1, [story(5), story(6)], true, { at: 1000, ids: [4, 5, 6] });
 
-        expect(await readFeedPage('top', 1)).toMatchObject({ page: 1, hasMore: true, stories: [{ id: 5 }, { id: 6 }] });
+        expect(await readFeedPage('top', 1)).toMatchObject({ page: 1, hasMore: true, stories: [{ id: 5 }, { id: 6 }], at: 1000, ids: [4, 5, 6] });
         expect(await readFeedPage('new', 1)).toBeUndefined();
     });
 
