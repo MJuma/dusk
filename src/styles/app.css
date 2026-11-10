@@ -1034,6 +1034,7 @@ a.story-domain:hover {
     /* Where this reply's box starts, from the card's left edge. */
     --box-x: calc(var(--card-pad) + (var(--d) - 1) * var(--indent));
     --box: var(--box-even);
+    --box-other: var(--box-odd);
     margin: 0;
     padding: 0 var(--card-pad) 0.6rem calc(var(--box-x) + var(--edge) + var(--rail-gap));
     border: solid var(--border);
@@ -1067,10 +1068,108 @@ a.story-domain:hover {
 
 :root[data-comment-style='cards'] .c:is([data-hue='1'], [data-hue='3'], [data-hue='5'], [data-hue='7']) {
     --box: var(--box-odd);
+    --box-other: var(--box-even);
 }
 
+/*
+ * Space under each reply box, inside its parent's. A row closes one box for each level the next row
+ * steps back up (its own box too, unless the next row is its reply). Depth isn't visible to CSS, but
+ * each row's hue is depth mod 8, and the next row's hue tells how far it steps back.
+ */
+:root[data-comment-style='cards'] .c[data-hue='0'] {
+    --h: 0;
+}
+
+:root[data-comment-style='cards'] .c:has(+ .c[data-hue='0']) {
+    --next-h: 0;
+}
+
+:root[data-comment-style='cards'] .c[data-hue='1'] {
+    --h: 1;
+}
+
+:root[data-comment-style='cards'] .c:has(+ .c[data-hue='1']) {
+    --next-h: 1;
+}
+
+:root[data-comment-style='cards'] .c[data-hue='2'] {
+    --h: 2;
+}
+
+:root[data-comment-style='cards'] .c:has(+ .c[data-hue='2']) {
+    --next-h: 2;
+}
+
+:root[data-comment-style='cards'] .c[data-hue='3'] {
+    --h: 3;
+}
+
+:root[data-comment-style='cards'] .c:has(+ .c[data-hue='3']) {
+    --next-h: 3;
+}
+
+:root[data-comment-style='cards'] .c[data-hue='4'] {
+    --h: 4;
+}
+
+:root[data-comment-style='cards'] .c:has(+ .c[data-hue='4']) {
+    --next-h: 4;
+}
+
+:root[data-comment-style='cards'] .c[data-hue='5'] {
+    --h: 5;
+}
+
+:root[data-comment-style='cards'] .c:has(+ .c[data-hue='5']) {
+    --next-h: 5;
+}
+
+:root[data-comment-style='cards'] .c[data-hue='6'] {
+    --h: 6;
+}
+
+:root[data-comment-style='cards'] .c:has(+ .c[data-hue='6']) {
+    --next-h: 6;
+}
+
+:root[data-comment-style='cards'] .c[data-hue='7'] {
+    --h: 7;
+}
+
+:root[data-comment-style='cards'] .c:has(+ .c[data-hue='7']) {
+    --next-h: 7;
+}
+
+:root[data-comment-style='cards'] .c {
+    --gap: 0.5rem;
+    --next-h: calc(var(--h) + 1);
+    --closes: min(8, mod(var(--h) - var(--next-h) + 9, 8));
+    padding-bottom: calc(0.6rem + var(--closes) * var(--gap));
+}
+
+/* The end of a thread closes every box it's in. */
+:root[data-comment-style='cards'] .c:is(:has(+ .c-top), :last-child) {
+    --closes: min(8, var(--d));
+}
+
+/* One step per closed box: its bottom edge, then a gap in its parent's shade, starting at its left edge. */
 :root[data-comment-style='cards'] .c::before {
-    content: none;
+    inset: auto 0 0;
+    width: auto;
+    height: calc(var(--closes) * var(--gap));
+    /* A thread's last row is rounded at the bottom; keep the steps inside its corners. */
+    border-radius: 0;
+    border-bottom-right-radius: inherit;
+    border-bottom-left-radius: inherit;
+    background:
+        linear-gradient(var(--border) 0 1px, var(--box-other) 1px) calc(var(--box-x) - 0 * var(--indent)) calc(0 * var(--gap)) / 100% var(--gap) no-repeat,
+        linear-gradient(var(--border) 0 1px, var(--box) 1px) calc(var(--box-x) - 1 * var(--indent)) calc(1 * var(--gap)) / 100% var(--gap) no-repeat,
+        linear-gradient(var(--border) 0 1px, var(--box-other) 1px) calc(var(--box-x) - 2 * var(--indent)) calc(2 * var(--gap)) / 100% var(--gap) no-repeat,
+        linear-gradient(var(--border) 0 1px, var(--box) 1px) calc(var(--box-x) - 3 * var(--indent)) calc(3 * var(--gap)) / 100% var(--gap) no-repeat,
+        linear-gradient(var(--border) 0 1px, var(--box-other) 1px) calc(var(--box-x) - 4 * var(--indent)) calc(4 * var(--gap)) / 100% var(--gap) no-repeat,
+        linear-gradient(var(--border) 0 1px, var(--box) 1px) calc(var(--box-x) - 5 * var(--indent)) calc(5 * var(--gap)) / 100% var(--gap) no-repeat,
+        linear-gradient(var(--border) 0 1px, var(--box-other) 1px) calc(var(--box-x) - 6 * var(--indent)) calc(6 * var(--gap)) / 100% var(--gap) no-repeat,
+        linear-gradient(var(--border) 0 1px, var(--box) 1px) calc(var(--box-x) - 7 * var(--indent)) calc(7 * var(--gap)) / 100% var(--gap) no-repeat;
 }
 
 :root[data-comment-style='cards'] .c-top {
